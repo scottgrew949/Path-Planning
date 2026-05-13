@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s https://api.github.com/repos/mackorone/mms/contents/)",
+      "Bash(python3 -c \"import sys,json; [print\\(f[''''name'''']\\) for f in json.load\\(sys.stdin\\)]\")",
+      "Bash(curl -s https://api.github.com/repos/mackorone/mms/contents/src)",
+      "Bash(curl -s https://raw.githubusercontent.com/mackorone/mms/master/README.md)",
+      "Bash(g++ -std=c++17 -Wall -Wextra -O2 main.cpp core/Position.cpp core/Types.cpp environment/Cell.cpp environment/Environment.cpp planning/algorithms/AStar.cpp planning/algorithms/Dijkstra.cpp planning/algorithms/BFS.cpp planning/algorithms/BidirectionalAStar.cpp utils/ProbabilityUtils.cpp visualization/Visualizer.cpp -o pathplanning)",
+      "Bash(./pathplanning)",
+      "Bash(g++ -std=c++17 -Wall -Wextra -O2 main.cpp core/Position.cpp core/Types.cpp environment/Cell.cpp environment/Environment.cpp planning/algorithms/AStar.cpp planning/algorithms/Dijkstra.cpp planning/algorithms/BFS.cpp planning/algorithms/BidirectionalAStar.cpp planning/algorithms/ThetaStar.cpp utils/ProbabilityUtils.cpp visualization/Visualizer.cpp -o pathplanning)",
+      "Bash(npx ts-node *)",
+      "Bash(pnpm add *)",
+      "Bash(python3 /Users/scott/Desktop/BroncoHacks/scott/tests/test-pi-post.py)",
+      "Bash(python3 scott/tests/test-pi-post.py)",
+      "Read(//private/etc/ssl/**)",
+      "Bash(openssl version *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/log-event -H 'Content-Type: application/json' -H 'x-device-secret: bintelligence-pi-secret-2024' -d '{\"scan_id\":\"test-123\",\"nfc_uid\":\"00:00:00:00:00:00\",\"item_type\":\"recycle\",\"confidence\":0.94}')",
+      "Bash(git -C /Users/scott/Desktop/BroncoHacks diff HEAD -- app/api/stats/route.ts app/login/page.tsx lib/auth.ts lib/mongodb.ts lib/pusher.ts app/api/scan/claim/route.ts app/scan/page.tsx)",
+      "Bash(git add *)",
+      "Bash(GIT_EDITOR=true git rebase --continue)",
+      "Bash(git push *)",
+      "Bash(curl -s http://localhost:3000/api/events)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('events count:', len\\(d.get\\('events',[]\\)\\), '\\\\nfirst event image length:', len\\(d.get\\('events',[]\\)[0].get\\('image',''\\)\\) if d.get\\('events'\\) else 'no events'\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); events=d.get\\('events',[]\\); print\\('total events:', len\\(events\\)\\); [print\\(f'event {i}: image={len\\(e.get\\(\\\\\"image\\\\\",\\\\\"\\\\\"\\)\\)} chars'\\) for i,e in enumerate\\(events[:6]\\)]\")"
+    ]
+  }
+}

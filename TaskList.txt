@@ -1,0 +1,280 @@
+================================================================================
+  ROBOT PATH PLANNING & REINFORCEMENT LEARNING SYSTEM
+  Project Overview + Architecture + Phase Task List
+================================================================================
+
+--------------------------------------------------------------------------------
+  PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+
+A ground-up C++ implementation of a robot navigation system that bridges
+classical AI planning algorithms and modern reinforcement learning. The project
+simulates the core software stack of an autonomous vehicle or mobile robot:
+perceiving an environment, planning a path through it, and learning from
+experience to improve over time.
+
+The system is built entirely without external AI/ML libraries. Every algorithm,
+data structure, and learning mechanism is implemented from first principles in
+production-quality C++17.
+
+WHAT IT DEMONSTRATES:
+  - Mastery of classical graph search: A*, Dijkstra, BFS, Bidirectional A*,
+    Theta* (any-angle planning with line-of-sight shortcuts)
+  - Reinforcement learning from scratch: tabular Q-learning, Bellman equation,
+    epsilon-greedy exploration, episode-based training
+  - Deep RL: DQN, Double DQN, Dueling DQN via C++ environment + PyTorch bridge
+  - Clean systems architecture: abstract interfaces, polymorphism, separation
+    of concerns, zero external AI dependencies in the C++ core
+  - Real-world relevance: every component maps directly to autonomous vehicle
+    technology — occupancy grids, sensor fusion, motion planning, learned policy
+
+SELF-DRIVING CAR ANALOG:
+  Environment      = occupancy grid (what LiDAR produces)
+  Classical algos  = global route planner (Google Maps layer)
+  RL agent         = local motion policy (reacts to dynamic obstacles)
+  DQN              = neural net replacing the lookup table for large state spaces
+  Pi + Camera      = real-time perception pipeline feeding live obstacle data
+
+HARDWARE EXTENSION (Raspberry Pi + Camera):
+  A physical grid on a table with real obstacles detected by an overhead Pi
+  camera feeds live data into the C++ environment. The RL agent navigates a
+  grid that mirrors the physical world in real time — a miniature perception
+  to planning to learning pipeline.
+
+TARGET AUDIENCE: Robotics engineering, ML engineering, autonomous systems
+                 research, computer science academia
+
+--------------------------------------------------------------------------------
+  SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+
+DIRECTORY STRUCTURE:
+
+  core/
+    Position.h/.cpp         — (x,y) coordinate type. Implements ==, !=, <.
+                              PositionHash struct enables use as unordered_map key.
+    Types.h/.cpp            — Project-wide enums and value structs:
+                                CellType      — EMPTY, OBSTACLE, START, GOAL, PATH, VISITED
+                                AlgorithmType — labels each algorithm for reporting
+                                Action        — UP/DOWN/LEFT/RIGHT (int values 0-3)
+                                PathResult    — bundles path + cost + time + nodes explored
+                                StepResult    — bundles newPosition + reward + done flag
+
+  environment/
+    Cell.h/.cpp             — Single grid cell. Holds CellType and display character.
+    Environment.h/.cpp      — The grid. Dual representation:
+                                vector<vector<Cell>>   — full cell state for rendering
+                                bitset<10000>          — O(1) obstacle lookup for planning
+                              Key methods:
+                                generateLabyrinth()    — recursive backtracking maze +
+                                                         random wall removal for loops.
+                                                         Guarantees a valid path exists.
+                                getNeighbors()         — returns walkable adjacent cells
+                                inBounds() / isObstacle() / isValid()
+                                moveCost()             — edge weight (diagonal costs root 2)
+                                reset()                — clears PATH/VISITED overlays
+
+  planning/
+    IPathfinder.h           — Abstract base class. Pure virtual interface:
+                                findPath(), getName(), getType(), getNodesExplored()
+                              Contains protected static reconstructPath() shared by
+                              all algorithms. No duplicated path reconstruction logic.
+    algorithms/
+      AStar.h/.cpp          — Best-first search with heuristic (Manhattan distance).
+                              Uses priority_queue + costFromStart unordered_map.
+                              Finds optimal path, explores far fewer nodes than Dijkstra.
+      Dijkstra.h/.cpp       — Uniform cost search. Explores in rings of equal cost.
+                              Optimal but slower than A* — no directional bias.
+      BFS.h/.cpp            — Unweighted shortest path. Queue-based, ignores edge costs.
+      BidirectionalAStar.h/.cpp — Simultaneous forward (start to goal) and backward
+                              (goal to start) A* searches that meet in the middle.
+                              Explores ~3.5x fewer nodes than single-direction A*.
+      ThetaStar.h/.cpp      — Any-angle planning. Checks line-of-sight from grandparent
+                              directly to neighbor using Bresenham's algorithm.
+                              If clear, skips current node — path not constrained to
+                              grid edges. Returns smooth waypoint paths.
+
+  rl/
+    RLEnvironment.h/.cpp    — Gym-style wrapper around Environment.
+                              Exposes reset() and step(action) interface.
+                              Reward design:
+                                +100.0  goal reached
+                                 -1.0   each valid step (encourages efficiency)
+                                -10.0   wall or out-of-bounds hit
+    QTable.h/.cpp           — State-action value store.
+                              unordered_map<Position, array<double,4>, PositionHash>
+                              One array of 4 doubles per visited cell (one per action).
+                              getValue / setValue / getBestAction / getMaxValue
+    QLearningAgent.h/.cpp   — Tabular Q-learning agent.
+                              Hyperparameters: alpha, gamma, epsilon, epsilonDecay, epsilonMin
+                              runEpisode() / train() / extractGreedyPath()
+                              selectAction() — epsilon-greedy
+                              updateQValue() — Bellman equation
+                              decayEpsilon() — reduce exploration each episode
+
+  utils/
+    ProbabilityUtils.h/.cpp — bayesUpdateSensor(), expectedValue(), entropy()
+
+  visualization/
+    Visualizer.h/.cpp       — displayGrid(), displayPath(), displayStats(),
+                              displaySummaryTable()
+
+  main.cpp                  — Full demonstration driver. All phases wired up.
+  TaskList.txt              — This file.
+  compile_commands.json     — clangd index for IDE tooling.
+
+KEY DESIGN DECISIONS:
+
+  grid_[x][y] layout         — outer vector is x (columns), inner is y (rows).
+  IPathfinder interface       — all algorithms stored as vector<unique_ptr<IPathfinder>>.
+                               Adding a new algorithm = new class, zero changes to main.
+  reconstructPath in base     — shared protected static, no duplication across algos.
+  bitset<10000> for obstacles — O(1) lookup called millions of times during search.
+  PositionHash as struct      — avoids UB from std::hash specialisation.
+  RLEnvironment by reference  — does not own the Environment. Caller controls lifetime.
+  QTable lazy init            — only visited states stored, obstacle cells never appear.
+  Hyperparameter validation   — constructor throws on invalid values. Silent bad
+                               hyperparameters are impossible to debug after the fact.
+
+STL CONTAINER MAP:
+
+  vector<vector<Cell>>                    Environment grid (rendering)
+  bitset<10000>                           Environment obstacle lookup
+  unordered_set<Position,PositionHash>    BFS visited, Environment visited tracking
+  unordered_map<Position,T,PositionHash>  A*, Dijkstra, BFS, ThetaStar cost/parent maps
+  priority_queue + Comparator             A*, Dijkstra, ThetaStar open set
+  queue<Position>                         BFS frontier
+  array<double,4>                         QTable per-cell action values
+  unordered_map<Position,array<double,4>> QTable full store
+  vector<unique_ptr<IPathfinder>>         main.cpp algorithm collection
+  vector<TrainingResult>                  QLearningAgent training history
+
+CODE STANDARDS (enforced throughout):
+
+  - No auto — explicit types everywhere, code is self-documenting
+  - No single-letter variable or parameter names — ever
+  - No TODOs in completed code (removed on second-pass review)
+  - Full input validation and error handling on all public interfaces
+  - Every file ships as if it goes to production
+
+--------------------------------------------------------------------------------
+  PHASE TASK LIST
+--------------------------------------------------------------------------------
+
+PHASE 1 — C++ Classical Planning Foundation
+  [x] Position.h/.cpp
+  [x] Types.h/.cpp
+  [x] Cell.h/.cpp
+  [x] Environment.h/.cpp
+  [x] IPathfinder.h
+  [x] AStar.h/.cpp
+  [x] Dijkstra.h/.cpp
+  [x] BFS.h/.cpp
+  [x] BidirectionalAStar.h/.cpp
+  [x] ThetaStar.h/.cpp
+  [x] ProbabilityUtils.h/.cpp
+  [x] Visualizer.h/.cpp
+  [x] main.cpp
+
+PHASE 2 — Additional Classical Algorithms (deferred until after Phase 3)
+  [ ] JPS.h/.cpp               — Jump Point Search, grid-optimised A*
+  [ ] DStarLite.h/.cpp         — incremental replanning for dynamic obstacles
+  [ ] RRT.h/.cpp               — Rapidly-exploring Random Tree for continuous space
+
+PHASE 3 — Reinforcement Learning (C++, tabular)
+  [x] RLEnvironment.h/.cpp
+  [x] QTable.h/.cpp
+  [x] QLearningAgent.h/.cpp
+  [x] Wire RL into main.cpp    — train agent, display learning curve, show greedy path
+  [x] Verify convergence       — agent reaches goal consistently after N episodes
+
+PHASE 4 — Deep RL: DQN (C++ environment + Python/PyTorch)
+  [x] pybind11 bridge          — expose RLEnvironment reset/step to Python
+  [x] ReplayBuffer             — circular buffer of (s,a,r,s') experience tuples
+  [x] DQN network              — fully connected net: position input, 4 Q-values out
+  [x] Target network           — frozen copy updated every N steps
+  [x] DQN training loop        — sample replay buffer, gradient descent on Bellman loss
+  [x] Double DQN               — decouple action selection from value estimation
+  [x] Dueling DQN              — value stream + advantage stream architecture
+  [x] Training visualisation   — matplotlib reward curve, loss curve, path length
+  [ ] Value heatmap            — Q-values overlaid on grid as colour map
+
+PHASE 4b — Dyna-Q (model-based RL)
+  [ ] EnvironmentModel         — agent's learned model: (s,a) to (s', reward)
+  [ ] Dyna-Q training loop     — real step + N simulated planning steps per real step
+  [ ] Benchmark vs tabular     — sample efficiency comparison
+
+PHASE 5 — Policy Gradient: PPO / Actor-Critic
+  [ ] Actor network            — outputs action probability distribution
+  [ ] Critic network           — estimates state value V(s)
+  [ ] Advantage estimation     — A(s,a) = Q(s,a) - V(s)
+  [ ] PPO clipping             — stable policy update
+  [ ] Compare vs DQN
+
+PHASE 6 — Imitation Learning
+  [ ] Expert demonstration     — A* generates optimal trajectory dataset
+  [ ] Behavioural cloning      — supervised learning to mimic A* decisions
+  [ ] DAgger                   — iterative imitation with expert queries
+  [ ] Benchmark vs random init
+
+PHASE 7 — Curriculum Learning + Benchmarking
+  [ ] Curriculum scheduler     — easy mazes first, increase difficulty over training
+  [ ] Statistical benchmark    — 1000 random seeds, mean path length, success rate
+  [ ] benchmark_plot.py        — bar chart comparing all algorithms
+  [ ] Classical vs RL analysis
+
+PHASE 8 — Dynamic Obstacles + Partial Observability
+  [ ] DynamicEnvironment       — obstacles that move each timestep
+  [ ] SensorModel              — agent sees only within radius R
+  [ ] D* Lite integration      — replan each frame
+  [ ] RL local policy          — handle dynamic agents classical planner cannot predict
+
+PHASE 9 — Neural A* (Hybrid Classical-RL)
+  [ ] Learned heuristic        — neural net replaces Manhattan distance
+  [ ] Train on maze dataset
+  [ ] Benchmark vs standard A*
+
+PHASE 10 — Attention-Based Policy (Research Level)
+  [ ] Grid encoder             — CNN or patch embedding
+  [ ] Transformer policy       — self-attention over grid state
+  [ ] Decision Transformer     — RL as sequence prediction, no Bellman required
+  [ ] Diffuser                 — diffusion model generates full trajectories
+
+================================================================================
+MVP FINISHED
+================================================================================
+
+PHASE 11 — Hardware Integration (Raspberry Pi + Camera)
+  [ ] Overhead camera setup
+  [ ] Obstacle detection       — OpenCV colour detection or ArUco markers
+  [ ] Live grid update         — detected obstacles feed into env.setObstacle()
+  [ ] Real-time demo           — agent navigates grid mirroring physical world
+  [ ] Visualisation overlay    — agent position + Q-values on camera feed
+
+PHASE 12 — OpenStreetMap Integration
+  [ ] OSM graph import         — libosmium: intersections as nodes, roads as edges
+  [ ] Coordinate projection    — lat/lon to x/y
+  [ ] Dynamic edge weights     — real-time traffic data
+  [ ] Run A*/Dijkstra on map
+
+--------------------------------------------------------------------------------
+  COMPILE COMMAND (Phase 1-3)
+--------------------------------------------------------------------------------
+
+g++ -std=c++17 -Wall -Wextra -O2 \
+    main.cpp \
+    core/Position.cpp core/Types.cpp \
+    environment/Cell.cpp environment/Environment.cpp \
+    planning/algorithms/AStar.cpp \
+    planning/algorithms/Dijkstra.cpp \
+    planning/algorithms/BFS.cpp \
+    planning/algorithms/BidirectionalAStar.cpp \
+    planning/algorithms/ThetaStar.cpp \
+    rl/RLEnvironment.cpp \
+    rl/QTable.cpp \
+    rl/QLearningAgent.cpp \
+    utils/ProbabilityUtils.cpp \
+    visualization/Visualizer.cpp \
+    -o pathplanning
+
+================================================================================

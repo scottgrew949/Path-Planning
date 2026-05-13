@@ -1,0 +1,92 @@
+[
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "main.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c main.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "core/Position.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c core/Position.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "core/Types.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c core/Types.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "environment/Cell.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c environment/Cell.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "environment/Environment.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c environment/Environment.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/AStar.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/AStar.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/Dijkstra.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/Dijkstra.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/BFS.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/BFS.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/BidirectionalAStar.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/BidirectionalAStar.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/DStarLite.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/DStarLite.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/ThetaStar.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/ThetaStar.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/JPS.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/JPS.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/algorithms/RRT.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/algorithms/RRT.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "rl/RLEnvironment.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c rl/RLEnvironment.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "rl/QTable.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c rl/QTable.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "rl/QLearningAgent.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c rl/QLearningAgent.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "utils/ProbabilityUtils.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c utils/ProbabilityUtils.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "visualization/Visualizer.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c visualization/Visualizer.cpp"
+  }
+]
