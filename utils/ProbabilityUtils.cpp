@@ -103,7 +103,7 @@ bool ProbabilityUtils::isValidPMF(const vector<double>& outcomesProbabilities, d
     }
     
     double sum = accumulate(outcomesProbabilities.begin(), outcomesProbabilities.end(), 0.0);
-    return abs(sum - 1.0) <= tolerance;
+    return std::abs(sum - 1.0) <= tolerance;
 }
 
 void ProbabilityUtils::normalise(vector<double>& weights)

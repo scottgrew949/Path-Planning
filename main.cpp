@@ -9,11 +9,19 @@
 //       planning/algorithms/AStar.cpp \
 //       planning/algorithms/Dijkstra.cpp \
 //       planning/algorithms/BFS.cpp \
+//       planning/algorithms/BidirectionalAStar.cpp \
+//       planning/algorithms/ThetaStar.cpp \
+//       planning/algorithms/JPS.cpp \
+//       planning/algorithms/DStarLite.cpp \
+//       planning/algorithms/RRT.cpp \
+//       rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
+//       rl/QTable.cpp rl/RLEnvironment.cpp \
 //       utils/ProbabilityUtils.cpp \
 //       visualization/Visualizer.cpp \
 //       -o pathplanning
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <map>
 #include <memory>
@@ -29,10 +37,14 @@
 #include "planning/algorithms/BFS.h"
 #include "planning/algorithms/BidirectionalAStar.h"
 #include "planning/algorithms/ThetaStar.h"
+#include "planning/algorithms/JPS.h"
+#include "planning/algorithms/DStarLite.h"
+#include "planning/algorithms/RRT.h"
 #include "utils/ProbabilityUtils.h"
 #include "visualization/Visualizer.h"
 #include "rl/RLEnvironment.h"
 #include "rl/QLearningAgent.h"
+#include "rl/DynaQAgent.h"
 
 using namespace std;
 
@@ -54,23 +66,22 @@ static PathResult runTimed(IPathfinder&       algo,
     result.elapsedMs     = ms;
     result.nodesExplored = algo.getNodesExplored();
 
-    if (path.size() >= 2)
+    for (size_t i = 0; i + 1 < path.size(); ++i)
     {
-        result.pathCost = env.moveCost(path[0], path[0], path[1]);
-        for(size_t i = 1; i < path.size()-1; ++i)
-            result.pathCost += env.moveCost(path[i-1], path[i], path[i+1]);
+        const Position& prev = (i == 0) ? path[0] : path[i - 1];
+        result.pathCost += env.moveCost(prev, path[i], path[i + 1]);
     }
 
     return result;
 }
 
-// ---- Helper: build a hand-crafted 12x16 scenario ----------------------------
+// ---- Helper: build a 151x41 labyrinth scenario ------------------------------
 static Environment buildScenario()
 {
-    Environment env(41, 41);
+    Environment env(201, 41);
     env.setStart(Position(0, 0));
-    env.setGoal(Position(38, 40));
-    env.generateLabyrinth(0.3);
+    env.setGoal(Position(200, 40));
+    env.generateLabyrinth(0.4);
 
     return env;
 }
@@ -100,6 +111,9 @@ int main()
     algos.push_back(make_unique<BFS>());
     algos.push_back(make_unique<BidirectionalAStar>());
     algos.push_back(make_unique<ThetaStar>());
+    algos.push_back(make_unique<JPS>());
+    algos.push_back(make_unique<DStarLite>());
+    algos.push_back(make_unique<RRT>());
 
     vector<PathResult> results;
     for (auto& algo : algos)
@@ -129,13 +143,14 @@ int main()
     //       This is the core of occupancy grid updating in real autonomous vehicles.
 
     // demonstrate expectedValue with path costs:
-    vector<double> costs = {results[0].pathCost, results[1].pathCost, results[2].pathCost, results[3].pathCost, results[4].pathCost};
-    vector<double> probs = {0.2, 0.2, 0.2, 0.2, 0.2};
+    vector<double> costs;
+    for (const auto& res : results) costs.push_back(res.pathCost);
+    vector<double> probs(costs.size(), 1.0 / costs.size());
     double ev = ProbabilityUtils::expectedValue(costs, probs);
     cout << "Expected path cost: " << ev << '\n';
 
     // demonstrate entropy:
-    vector<double> uniform = {0.2, 0.2, 0.2, 0.2, 0.2};
+    vector<double> uniform(costs.size(), 1.0 / costs.size());
     cout << "Route entropy (5 equal options): "
         << ProbabilityUtils::entropy(uniform) << " bits\n";
 
@@ -150,48 +165,134 @@ int main()
     // Wrap the grid in a gym-style interface
     RLEnvironment rlEnv(env);
 
-    // Construct the agent with hyperparameters:
+    // Shared hyperparameters for both agents:
     //   learningRate  = 0.1   — small, stable updates
     //   discountFactor= 0.95  — values long-term reward (goal is far away)
     //   epsilonStart  = 1.0   — fully random at start, agent knows nothing
     //   epsilonMin    = 0.05  — always keep 5% exploration
     //   epsilonDecay  = 0.995 — slow decay, enough episodes to explore the maze
-    QLearningAgent agent(rlEnv, 0.1, 0.95, 1.0, 0.05, 0.995);
+    const double learningRate   = 0.1;
+    const double discountFactor = 0.95;
+    const double epsilonStart   = 1.0;
+    const double epsilonMin     = 0.05;
+    const double epsilonDecay   = 0.995;
 
-    int numEpisodes        = 5000;
-    int maxStepsPerEpisode = rlEnv.getWidth() * rlEnv.getHeight() * 4;
+    const int numEpisodes        = 10000;
+    const int maxStepsPerEpisode = rlEnv.getWidth() * rlEnv.getHeight() * 4;
 
-    cout << "Training for " << numEpisodes << " episodes...\n";
-    vector<TrainingResult> trainingHistory = agent.train(numEpisodes, maxStepsPerEpisode);
-
-    // Print every 500th episode as a learning curve sample
-    cout << "\nEpisode | Goal Reached | Steps | Total Reward | Epsilon\n";
-    cout << "--------|--------------|-------|--------------|--------\n";
-    for (int episodeIndex = 0; episodeIndex < numEpisodes; ++episodeIndex)
+    // ---- Q-Learning ---------------------------------------------------------
     {
-        if ((episodeIndex + 1) % 500 == 0)
+        QLearningAgent agent(rlEnv, learningRate, discountFactor,
+                             epsilonStart, epsilonMin, epsilonDecay);
+
+        cout << "Training for " << numEpisodes << " episodes...\n";
+        cout << "\nEpisode | Goal Reached | Steps | Total Reward | Epsilon\n";
+        cout << "--------|--------------|-------|--------------|--------\n";
+        cout.flush();
+
+        vector<TrainingResult> trainingHistory;
+        trainingHistory.reserve(numEpisodes);
+        for (int ep = 1; ep <= numEpisodes; ++ep)
         {
-            const TrainingResult& snapshot = trainingHistory[episodeIndex];
-            cout << snapshot.episodeNumber   << "\t| "
-                 << (snapshot.goalReached ? "YES" : "NO") << "\t\t| "
-                 << snapshot.stepsToGoal     << "\t| "
-                 << snapshot.totalReward     << "\t\t| "
-                 << snapshot.epsilonAtEnd    << "\n";
+            TrainingResult r = agent.runEpisode(ep, maxStepsPerEpisode);
+            trainingHistory.push_back(r);
+            if (ep % 1000 == 0)
+            {
+                cout << r.episodeNumber   << "\t| "
+                     << (r.goalReached ? "YES" : "NO") << "\t\t| "
+                     << r.stepsToGoal     << "\t| "
+                     << r.totalReward     << "\t\t| "
+                     << r.epsilonAtEnd    << "\n";
+                cout.flush();
+            }
+        }
+
+        // Write full training history to CSV
+        {
+            ofstream csv("qlearning_training.csv");
+            csv << "episode,total_reward,steps,goal_reached,epsilon\n";
+            for (const TrainingResult& r : trainingHistory)
+                csv << r.episodeNumber << ","
+                    << r.totalReward   << ","
+                    << r.stepsToGoal   << ","
+                    << (r.goalReached ? 1 : 0) << ","
+                    << r.epsilonAtEnd  << "\n";
+            cout << "Training data written to qlearning_training.csv\n";
+        }
+
+        // Reset rlEnv so extractGreedyPath starts from the true start position
+        rlEnv.reset();
+        vector<Position> learnedPath = agent.extractGreedyPath(maxStepsPerEpisode);
+
+        if (learnedPath.empty())
+        {
+            cout << "\nAgent did not learn a complete path. Try more episodes.\n";
+        }
+        else
+        {
+            cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
         }
     }
 
-    // Extract and display the greedy path learned by the agent
-    env.reset();
-    vector<Position> learnedPath = agent.extractGreedyPath(maxStepsPerEpisode);
+    // ---- Dyna-Q (model-based RL, n=10) --------------------------------------
+    Visualizer::printSection("Dyna-Q (model-based RL, n=10)");
 
-    if (learnedPath.empty())
+    // Reset rlEnv between agent runs so Dyna-Q starts from clean state
+    rlEnv.reset();
+
     {
-        cout << "\nAgent did not learn a complete path. Try more episodes.\n";
-    }
-    else
-    {
-        cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
-        Visualizer::displayPath(env, learnedPath, "Q-Learning");
+        const int planningSteps = 10;
+        DynaQAgent agent(rlEnv, learningRate, discountFactor,
+                         epsilonStart, epsilonMin, epsilonDecay,
+                         planningSteps);
+
+        cout << "Training for " << numEpisodes << " episodes...\n";
+        cout << "\nEpisode | Goal Reached | Steps | Total Reward | Epsilon\n";
+        cout << "--------|--------------|-------|--------------|--------\n";
+        cout.flush();
+
+        vector<TrainingResult> trainingHistory;
+        trainingHistory.reserve(numEpisodes);
+        for (int ep = 1; ep <= numEpisodes; ++ep)
+        {
+            TrainingResult r = agent.runEpisode(ep, maxStepsPerEpisode);
+            trainingHistory.push_back(r);
+            if (ep % 1000 == 0)
+            {
+                cout << r.episodeNumber   << "\t| "
+                     << (r.goalReached ? "YES" : "NO") << "\t\t| "
+                     << r.stepsToGoal     << "\t| "
+                     << r.totalReward     << "\t\t| "
+                     << r.epsilonAtEnd    << "\n";
+                cout.flush();
+            }
+        }
+
+        // Write full training history to CSV
+        {
+            ofstream csv("dynaq_training.csv");
+            csv << "episode,total_reward,steps,goal_reached,epsilon\n";
+            for (const TrainingResult& r : trainingHistory)
+                csv << r.episodeNumber << ","
+                    << r.totalReward   << ","
+                    << r.stepsToGoal   << ","
+                    << (r.goalReached ? 1 : 0) << ","
+                    << r.epsilonAtEnd  << "\n";
+            cout << "Training data written to dynaq_training.csv\n";
+        }
+
+        // Reset rlEnv so extractGreedyPath starts from the true start position
+        rlEnv.reset();
+        vector<Position> learnedPath = agent.extractGreedyPath(maxStepsPerEpisode);
+
+        if (learnedPath.empty())
+        {
+            cout << "\nAgent did not learn a complete path. Try more episodes.\n";
+        }
+        else
+        {
+            cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
+        }
     }
 
     return 0;

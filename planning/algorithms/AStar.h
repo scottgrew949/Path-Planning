@@ -27,6 +27,7 @@
 #include <vector>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <limits>
 #include "../../core/Position.h"
@@ -71,10 +72,11 @@ public:
     int getNodesExplored() const override;
 
 private:
-    int nodesExplored_;
+    int nodesExplored_ = 0;
     // Per-call state — cleared before each findPath() invocation.
     std::unordered_map<Position, double,   PositionHash> costFromStart_;
     std::unordered_map<Position, Position, PositionHash> arrivedFrom_;
+    std::unordered_set<Position,           PositionHash> finalized_;
 
     // Manhattan distance heuristic — admissible for cardinal-only movement.
     double heuristicDistance(const Position& a, const Position& b) const;

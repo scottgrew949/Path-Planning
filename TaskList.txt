@@ -95,6 +95,12 @@ DIRECTORY STRUCTURE:
                               grid edges. Returns smooth waypoint paths.
 
   rl/
+    RLAgent.h/.cpp          — Abstract base class for all tabular RL agents.
+                              Owns env_ ref, qTable_, all hyperparameters, PRNG.
+                              Shared: train(), extractGreedyPath(), selectAction(),
+                              updateQValue() (Bellman), decayEpsilon().
+                              Pure virtual: runEpisode(). Mirrors IPathfinder pattern.
+                              Constructor validates all hyperparameters — throws on bad values.
     RLEnvironment.h/.cpp    — Gym-style wrapper around Environment.
                               Exposes reset() and step(action) interface.
                               Reward design:
@@ -105,12 +111,15 @@ DIRECTORY STRUCTURE:
                               unordered_map<Position, array<double,4>, PositionHash>
                               One array of 4 doubles per visited cell (one per action).
                               getValue / setValue / getBestAction / getMaxValue
-    QLearningAgent.h/.cpp   — Tabular Q-learning agent.
-                              Hyperparameters: alpha, gamma, epsilon, epsilonDecay, epsilonMin
-                              runEpisode() / train() / extractGreedyPath()
-                              selectAction() — epsilon-greedy
-                              updateQValue() — Bellman equation
-                              decayEpsilon() — reduce exploration each episode
+    QLearningAgent.h/.cpp   — Tabular Q-learning agent (inherits RLAgent).
+                              Overrides runEpisode() — pure temporal difference learning.
+                              One Bellman update per real environment step.
+    DynaQAgent.h/.cpp       — Dyna-Q model-based RL agent (inherits RLAgent).
+                              After each real step: updates world model + runs planningSteps_
+                              additional Bellman updates replayed from the model.
+                              model_: unordered_map (state,action) -> (reward, next_state).
+                              modelKeys_: parallel vector for O(1) random sampling.
+                              planningSteps_=0 degenerates to pure Q-learning.
 
   utils/
     ProbabilityUtils.h/.cpp — bayesUpdateSensor(), expectedValue(), entropy()
@@ -147,15 +156,9 @@ STL CONTAINER MAP:
   array<double,4>                         QTable per-cell action values
   unordered_map<Position,array<double,4>> QTable full store
   vector<unique_ptr<IPathfinder>>         main.cpp algorithm collection
-  vector<TrainingResult>                  QLearningAgent training history
-
-CODE STANDARDS (enforced throughout):
-
-  - No auto — explicit types everywhere, code is self-documenting
-  - No single-letter variable or parameter names — ever
-  - No TODOs in completed code (removed on second-pass review)
-  - Full input validation and error handling on all public interfaces
-  - Every file ships as if it goes to production
+  vector<TrainingResult>                  QLearningAgent / DynaQAgent training history
+  unordered_map<ModelKey,ModelValue,...>  DynaQAgent world model
+  vector<ModelKey>                        DynaQAgent model keys (O(1) random sampling)
 
 --------------------------------------------------------------------------------
   PHASE TASK LIST
@@ -176,10 +179,10 @@ PHASE 1 — C++ Classical Planning Foundation
   [x] Visualizer.h/.cpp
   [x] main.cpp
 
-PHASE 2 — Additional Classical Algorithms (deferred until after Phase 3)
-  [ ] JPS.h/.cpp               — Jump Point Search, grid-optimised A*
-  [ ] DStarLite.h/.cpp         — incremental replanning for dynamic obstacles
-  [ ] RRT.h/.cpp               — Rapidly-exploring Random Tree for continuous space
+PHASE 2 — Additional Classical Algorithms
+  [x] JPS.h/.cpp               — Jump Point Search, grid-optimised A*
+  [x] DStarLite.h/.cpp         — incremental replanning for dynamic obstacles
+  [x] RRT.h/.cpp               — Rapidly-exploring Random Tree for continuous space
 
 PHASE 3 — Reinforcement Learning (C++, tabular)
   [x] RLEnvironment.h/.cpp
@@ -197,12 +200,13 @@ PHASE 4 — Deep RL: DQN (C++ environment + Python/PyTorch)
   [x] Double DQN               — decouple action selection from value estimation
   [x] Dueling DQN              — value stream + advantage stream architecture
   [x] Training visualisation   — matplotlib reward curve, loss curve, path length
-  [ ] Value heatmap            — Q-values overlaid on grid as colour map
+  [x] Value heatmap            — Q-values overlaid on grid as colour map
+  [x] Training curves — training_curves.py reward per episode, epsilon decay, plotted with matplotlib
 
 PHASE 4b — Dyna-Q (model-based RL)
-  [ ] EnvironmentModel         — agent's learned model: (s,a) to (s', reward)
-  [ ] Dyna-Q training loop     — real step + N simulated planning steps per real step
-  [ ] Benchmark vs tabular     — sample efficiency comparison
+  [x] EnvironmentModel         — agent's learned model: (s,a) to (s', reward)
+  [x] Dyna-Q training loop     — real step + N simulated planning steps per real step
+  [x] Benchmark vs tabular     — sample efficiency comparison
 
 PHASE 5 — Policy Gradient: PPO / Actor-Critic
   [ ] Actor network            — outputs action probability distribution
@@ -258,23 +262,26 @@ PHASE 12 — OpenStreetMap Integration
   [ ] Run A*/Dijkstra on map
 
 --------------------------------------------------------------------------------
-  COMPILE COMMAND (Phase 1-3)
+  COMPILE COMMANDS  (build.sh — run from project root)
 --------------------------------------------------------------------------------
 
-g++ -std=c++17 -Wall -Wextra -O2 \
-    main.cpp \
-    core/Position.cpp core/Types.cpp \
-    environment/Cell.cpp environment/Environment.cpp \
-    planning/algorithms/AStar.cpp \
-    planning/algorithms/Dijkstra.cpp \
-    planning/algorithms/BFS.cpp \
-    planning/algorithms/BidirectionalAStar.cpp \
-    planning/algorithms/ThetaStar.cpp \
-    rl/RLEnvironment.cpp \
-    rl/QTable.cpp \
-    rl/QLearningAgent.cpp \
-    utils/ProbabilityUtils.cpp \
-    visualization/Visualizer.cpp \
-    -o pathplanning
+  ./build.sh 1   — Classical pathfinding only (no RL, fastest compile)
+                   Output: ./pathplanning_classical
+
+  ./build.sh 2   — Full C++ binary: all 8 algorithms + Q-Learning + Dyna-Q
+  ./build.sh     — (same as above, default target)
+                   Output: ./pathplanning
+                   Writes: qlearning_training.csv, dynaq_training.csv
+
+  ./build.sh 3   — Python .so binding via pybind11 (required before 4)
+                   Requires: pip install pybind11
+
+  ./build.sh 4   — DQN deep RL training (Double DQN + Dueling DQN)
+                   Requires: build.sh 3 done, pip install torch
+                   Runtime: ~30–45 min CPU
+
+  ./build.sh 5   — Tabular RL training curves (matplotlib)
+                   Requires: pathplanning run first (generates CSVs)
+                   Output: training_curves.png
 
 ================================================================================

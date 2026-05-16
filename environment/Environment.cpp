@@ -87,7 +87,7 @@ void Environment::reset()
 // ---- File I/O ---------------------------------------------------------------
 
 // Wait until later to implement saved map loading
-void Environment::loadFromFile(const string& filename)
+void Environment::loadFromFile([[maybe_unused]] const string& filename)
 {
     // TODO: open filename with ifstream; throw runtime_error if open fails
     // TODO: read line by line; each char maps to a CellType:

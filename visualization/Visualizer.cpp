@@ -60,10 +60,10 @@ void Visualizer::displayGrid(const Environment& env)
 
     cout << "Grid (" << env.getHeight() << " x " << env.getWidth() << ")\n";
     printHorizontalBorder(env.getWidth());
-    for(auto r : rows)
+    for(const auto& r : rows)
     {
         cout << '|' << r << "|\n";
-    } 
+    }
     printHorizontalBorder(env.getWidth());
     cout << "Start: S - Goal: G - Path: * - Visited: ·\n";
 }
@@ -81,10 +81,10 @@ void Visualizer::displayPath(const Environment&      env,
         auto rows = renderGrid(env, path);
         printHorizontalBorder(env.getWidth());
 
-    for(auto r : rows)
+    for(const auto& r : rows)
     {
         cout << '|' << r << "|\n";
-    } 
+    }
 
     printHorizontalBorder(env.getWidth());
     }

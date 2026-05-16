@@ -15,8 +15,9 @@ AlgorithmType BFS::getType() const
 
 void BFS::clearState()
 {
-    arrivedFrom_.clear(); 
+    arrivedFrom_.clear();
     visited_.clear();
+    nodesExplored_ = 0;
 }
 
 int BFS::getNodesExplored() const
@@ -43,7 +44,7 @@ vector<Position> BFS::findPath(const Environment& env,
         if (current == goal)
             return reconstructPath(goal, start, arrivedFrom_);
 
-        for (Position reachableCell : env.getNeighbors(current))
+        for (const Position& reachableCell : env.getNeighbors(current))
         {
             if (!visited_.count(reachableCell))
             {

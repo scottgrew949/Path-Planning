@@ -52,9 +52,9 @@ private:
     std::unordered_map<Position, Position, PositionHash> arrivedFrom_;
     std::unordered_set<Position, PositionHash>           visited_;
 
-    int nodesExplored_;
+    int nodesExplored_ = 0;
 
     void clearState();
 };
 
-#endif  // BFS_
+#endif  // BFS_H

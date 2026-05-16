@@ -1,0 +1,11 @@
+venv/
+.cache/
+pathplanning
+pathplanning_classical
+*.o
+*.so
+*.csv
+*.png
+build/
+__pycache__/
+*.pyc

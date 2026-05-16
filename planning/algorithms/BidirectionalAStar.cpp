@@ -62,13 +62,16 @@ vector<Position> BidirectionalAStar::mergePaths(const Position& meetingPoint,
     reverse(forwardPath.begin(), forwardPath.end());    
 
     vector<Position> backwardPath;
-    current = backwardArrivedFrom_.at(meetingPoint);
-    while(current != goal)
+    if (meetingPoint != goal)
     {
-        backwardPath.push_back(current);
-        current = backwardArrivedFrom_.at(current);
+        current = backwardArrivedFrom_.at(meetingPoint);
+        while (current != goal)
+        {
+            backwardPath.push_back(current);
+            current = backwardArrivedFrom_.at(current);
+        }
+        backwardPath.push_back(goal);
     }
-    backwardPath.push_back(goal);
 
     forwardPath.insert(forwardPath.end(), backwardPath.begin(), backwardPath.end());
     return forwardPath;
@@ -108,7 +111,7 @@ vector<Position> BidirectionalAStar::findPath(const Environment& env,
             return mergePaths(currentBackward.pos, start, goal);
 
         // Neighbor Checking forward
-        for (Position neighbor : env.getNeighbors(currentForward.pos))
+        for (const Position& neighbor : env.getNeighbors(currentForward.pos))
         {
             if (forwardFinalized_.count(neighbor))
                 continue;  
@@ -126,7 +129,7 @@ vector<Position> BidirectionalAStar::findPath(const Environment& env,
         }
 
         // Neighbor Checking backward
-        for (Position neighbor : env.getNeighbors(currentBackward.pos))
+        for (const Position& neighbor : env.getNeighbors(currentBackward.pos))
         {
             if (backwardFinalized_.count(neighbor))
                 continue;  

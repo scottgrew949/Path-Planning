@@ -28,7 +28,7 @@ string Cell::toChar() const
     switch(type)
     {
         case CellType::EMPTY:    return " ";
-        case CellType::OBSTACLE: return "\u2588";
+        case CellType::OBSTACLE: return "\u2593";
         case CellType::START:    return "S";
         case CellType::GOAL:     return "G";
         case CellType::PATH:     return "*";

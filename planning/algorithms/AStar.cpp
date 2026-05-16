@@ -47,6 +47,7 @@ void AStar::clearState()
 {
     costFromStart_.clear();
     arrivedFrom_.clear();
+    finalized_.clear();
 }
 
 vector<Position> AStar::findPath(const Environment& env,
@@ -62,14 +63,17 @@ vector<Position> AStar::findPath(const Environment& env,
     nodesExplored_ = 0;
     while (!openSet.empty())
     {
-        AStarNode current = openSet.top(); 
+        AStarNode current = openSet.top();
         openSet.pop();
+
+        if (finalized_.count(current.pos)) continue;
+        finalized_.insert(current.pos);
         ++nodesExplored_;
 
         if (current.pos == goal)
             return reconstructPath(goal, start, arrivedFrom_);
 
-        for (Position neighbour : env.getNeighbors(current.pos))
+        for (const Position& neighbour : env.getNeighbors(current.pos))
         {
             double newCost = costFromStartTo(current.pos) + env.moveCost(current.previous, current.pos, neighbour);
 

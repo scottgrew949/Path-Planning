@@ -5,81 +5,169 @@
 
 using namespace std;
 
+// ---- Local helpers ----------------------------------------------------------
+
+static int sign(int n) { return (n > 0) ? 1 : (n < 0) ? -1 : 0; }
+
 // ---- JPSComparator ----------------------------------------------------------
 
 bool JPSComparator::operator()(const JPSNode& a, const JPSNode& b) const
 {
-    // TODO: min-heap on totalEstimatedCost
+    return a.totalEstimatedCost > b.totalEstimatedCost;
 }
 
 // ---- JPS --------------------------------------------------------------------
 
 string JPS::getName() const
 {
-    // TODO
+    return "JPS";
 }
 
 AlgorithmType JPS::getType() const
 {
-    // TODO
+    return AlgorithmType::JPS;
 }
 
 int JPS::getNodesExplored() const
 {
-    // TODO
+    return nodesExplored_;
 }
 
 void JPS::clearState()
 {
-    // TODO: clear costFromStart_, arrivedFrom_, finalized_, reset nodesExplored_
+    costFromStart_.clear();
+    arrivedFrom_.clear();
+    finalized_.clear();
+    nodesExplored_ = 0;
 }
 
 double JPS::heuristicDistance(const Position& a, const Position& b) const
 {
-    // TODO: Manhattan distance
+    return abs(a.x - b.x) + abs(a.y - b.y);
 }
 
 double JPS::costFromStartTo(const Position& p) const
 {
-    // TODO: return costFromStart_[p] or infinity if not found
+    unordered_map<Position, double, PositionHash>::const_iterator it = costFromStart_.find(p);
+    if (it != costFromStart_.end())
+        return it->second;
+    return numeric_limits<double>::infinity();
 }
 
 Position JPS::jump(const Environment& env,
-                    const Position&    current,
-                    const Position&    direction,
-                    const Position&    goal) const
+                   const Position&    current,
+                   const Position&    direction,
+                   const Position&    goal) const
 {
-    // TODO: advance one step in direction
-    //       if out of bounds or obstacle: return invalid position
-    //       if next == goal: return next (goal is always a jump point)
-    //       if next has forced neighbours in this direction: return next
-    //       recurse: return jump(env, next, direction, goal)
+    Position next(current.x + direction.x, current.y + direction.y);
+
+    if (!env.isValid(next))
+        return Position(-1, -1);
+
+    if (next == goal)
+        return next;
+
+    // Check for junction (forced perpendicular neighbor)
+    if (direction.x != 0)
+    {
+        if (env.isValid(Position(next.x, next.y + 1)) || env.isValid(Position(next.x, next.y - 1)))
+            return next;
+    }
+    else
+    {
+        if (env.isValid(Position(next.x + 1, next.y)) || env.isValid(Position(next.x - 1, next.y)))
+            return next;
+    }
+
+    return jump(env, next, direction, goal);
 }
 
 vector<Position> JPS::identifySuccessors(const Environment& env,
                                           const Position&    current,
                                           const Position&    goal) const
 {
-    // TODO: for each natural neighbour of current (pruned by direction from arrivedFrom_):
-    //         call jump(env, current, direction, goal)
-    //         if valid jump point found: add to successors
-    //       return successors
+    vector<Position> successors;
+
+    // Directions to scan from current node (stored as Position for jump() signature)
+    vector<Position> dirs;
+
+    auto it = arrivedFrom_.find(current);
+    if (it == arrivedFrom_.end())
+    {
+        // Start node — try all 4 cardinal directions
+        dirs = { Position(1,0), Position(-1,0), Position(0,1), Position(0,-1) };
+    }
+    else
+    {
+        const Position& parent = it->second;
+        Position d( sign(current.x - parent.x), sign(current.y - parent.y) );
+
+        dirs.push_back(d);
+
+        if (d.x != 0)
+        {
+            dirs.push_back(Position(0,  1));
+            dirs.push_back(Position(0, -1));
+        }
+        else
+        {
+            dirs.push_back(Position( 1, 0));
+            dirs.push_back(Position(-1, 0));
+        }
+    }
+
+    for (const Position& d : dirs)
+    {
+        Position jp = jump(env, current, d, goal);
+        if (jp.x >= 0)
+            successors.push_back(jp);
+    }
+
+    return successors;
 }
 
 vector<Position> JPS::findPath(const Environment& env,
                                 const Position&    start,
                                 const Position&    goal)
 {
-    // TODO: clearState()
-    // TODO: initialise open set with start node
+    clearState();
 
-    // TODO: main loop:
-    //         pop cheapest node as current
-    //         ++nodesExplored_
-    //         if current == goal: return reconstructPath
-    //         finalize current
-    //         successors = identifySuccessors(env, current, goal)
-    //         for each successor: relax edge, push to open set if improved
+    priority_queue<JPSNode, vector<JPSNode>, JPSComparator> openSet;
 
-    // TODO: return {}
+    costFromStart_[start] = 0.0;
+    openSet.push({start, start, 0.0, heuristicDistance(start, goal)});
+
+    while (!openSet.empty())
+    {
+        JPSNode current = openSet.top();
+        openSet.pop();
+
+        ++nodesExplored_;
+
+        if (finalized_.count(current.pos)) continue;
+        finalized_.insert(current.pos);
+
+        if (current.pos == goal)
+            return reconstructPath(goal, start, arrivedFrom_);
+
+        vector<Position> successors = identifySuccessors(env, current.pos, goal);
+
+        for (const Position& s : successors)
+        {
+            if (finalized_.count(s)) continue;
+
+            double newCost = costFromStart_[current.pos]
+                           + abs(s.x - current.pos.x)
+                           + abs(s.y - current.pos.y);
+
+            if (newCost < costFromStartTo(s))
+            {
+                costFromStart_[s] = newCost;
+                arrivedFrom_[s]   = current.pos;
+                openSet.push({s, current.pos, newCost, newCost + heuristicDistance(s, goal)});
+            }
+        }
+    }
+
+    return {};
 }

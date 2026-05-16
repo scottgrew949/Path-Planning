@@ -65,24 +65,14 @@ bool ThetaStar::hasLineOfSight(const Environment& env,
         y = from.y,
         e2 = 0;
 
-    while(true)
+    while (x != to.x || y != to.y)
     {
         if (env.isObstacle(Position(x, y))) return false;
-        if (Position(x, y) == to) return true;
-    
         e2 = 2 * error;
-        if (e2 > -dy)
-        {
-            error -= dy;
-            x += stepX;
-        }
-        if (e2 < dx)
-        {
-            error += dx;
-            y += stepY;
-        }
+        if (e2 > -dy) { error -= dy; x += stepX; }
+        if (e2 < dx)  { error += dx; y += stepY; }
     }
-    return false;
+    return !env.isObstacle(to);
 }
 
 double ThetaStar::costFromStartTo(const Position& p) const
@@ -111,7 +101,7 @@ vector<Position> ThetaStar::findPath(const Environment& env,
         if (current.pos == goal)
             return reconstructPath(goal, start, arrivedFrom_);
 
-        for (Position neighbour : env.getNeighbors(current.pos))
+        for (const Position& neighbour : env.getNeighbors(current.pos))
         {
             if (hasLineOfSight(env, current.previous, neighbour))
             {
@@ -138,4 +128,6 @@ vector<Position> ThetaStar::findPath(const Environment& env,
         }
 
     }
+
+    return {};
 }
