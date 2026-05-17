@@ -34,6 +34,7 @@
 #include "../core/Types.h"
 #include "../environment/Environment.h"
 #include "../rl/RLEnvironment.h"
+#include "../planning/algorithms/AStar.h"
 
 namespace py = pybind11;
 
@@ -44,19 +45,20 @@ namespace py = pybind11;
 class GridEnvironment
 {
 public:
-    GridEnvironment(int    width,
-                    int    height,
-                    int    startX,
-                    int    startY,
-                    int    goalX,
-                    int    goalY,
-                    double labyrinthDensity)
+    GridEnvironment(int      width,
+                    int      height,
+                    int      startX,
+                    int      startY,
+                    int      goalX,
+                    int      goalY,
+                    double   labyrinthDensity,
+                    unsigned seed = 0)
         : environment_(width, height),
           rlEnvironment_(environment_)
     {
         environment_.setStart(Position(startX, startY));
         environment_.setGoal(Position(goalX, goalY));
-        environment_.generateLabyrinth(labyrinthDensity);
+        environment_.generateLabyrinth(labyrinthDensity, seed);
     }
 
     // Gym interface — forwarded to RLEnvironment
@@ -104,6 +106,55 @@ public:
         return { rayDist(0, -1), rayDist(0, 1), rayDist(-1, 0), rayDist(1, 0) };
     }
 
+    // Returns optimal action index (0-3) for agent at (x,y) to reach goal.
+    // UP=0 (dy=-1), DOWN=1 (dy=+1), LEFT=2 (dx=-1), RIGHT=3 (dx=+1).
+    // Returns -1 if no path exists from (x,y) to goal.
+    int getExpertAction(int x, int y) const
+    {
+        AStar astar;
+        std::vector<Position> path = astar.findPath(
+            environment_, Position(x, y), environment_.getGoal());
+        if (path.size() < 2) return -1;
+        int dx = path[1].x - path[0].x;
+        int dy = path[1].y - path[0].y;
+        if (dx ==  0 && dy == -1) return 0;
+        if (dx ==  0 && dy ==  1) return 1;
+        if (dx == -1 && dy ==  0) return 2;
+        if (dx ==  1 && dy ==  0) return 3;
+        return -1;
+    }
+
+    // Runs A* from start to goal, returns flat list [x0,y0,a0, x1,y1,a1, ...].
+    // Each triple is (position, expert action at that position).
+    // Length = 3 * (path_length - 1). Empty if no path.
+    std::vector<int> getExpertTrajectory() const
+    {
+        AStar astar;
+        std::vector<Position> path = astar.findPath(
+            environment_, environment_.getStart(), environment_.getGoal());
+        std::vector<int> result;
+        result.reserve((path.size() > 0 ? path.size() - 1 : 0) * 3);
+        for (size_t i = 0; i + 1 < path.size(); ++i) {
+            int dx = path[i+1].x - path[i].x;
+            int dy = path[i+1].y - path[i].y;
+            int action = -1;
+            if (dx ==  0 && dy == -1) action = 0;
+            else if (dx ==  0 && dy ==  1) action = 1;
+            else if (dx == -1 && dy ==  0) action = 2;
+            else if (dx ==  1 && dy ==  0) action = 3;
+            result.push_back(path[i].x);
+            result.push_back(path[i].y);
+            result.push_back(action);
+        }
+        return result;
+    }
+
+    // Returns true if cell (x,y) contains an obstacle.
+    bool isObstacle(int x, int y) const
+    {
+        return environment_.isObstacle(Position(x, y));
+    }
+
 private:
     Environment    environment_;   // owned — lives as long as this object
     RLEnvironment  rlEnvironment_; // holds reference to environment_ above
@@ -116,18 +167,22 @@ PYBIND11_MODULE(pathplanning, module)
     module.doc() = "C++ path planning and RL environment bridge";
 
     py::class_<GridEnvironment>(module, "GridEnvironment")
-        .def(py::init<int, int, int, int, int, int, double>(),
+        .def(py::init<int, int, int, int, int, int, double, unsigned>(),
              py::arg("width"),
              py::arg("height"),
              py::arg("startX"),
              py::arg("startY"),
              py::arg("goalX"),
              py::arg("goalY"),
-             py::arg("labyrinthDensity"))
+             py::arg("labyrinthDensity"),
+             py::arg("seed") = 0)
         .def("reset",           &GridEnvironment::reset)
         .def("step",            &GridEnvironment::step)
         .def("getWidth",        &GridEnvironment::getWidth)
         .def("getHeight",       &GridEnvironment::getHeight)
         .def("getGoal",         &GridEnvironment::getGoal)
-        .def("getLineOfSight",  &GridEnvironment::getLineOfSight);
+        .def("getLineOfSight",  &GridEnvironment::getLineOfSight)
+        .def("getExpertAction",    &GridEnvironment::getExpertAction)
+        .def("getExpertTrajectory",&GridEnvironment::getExpertTrajectory)
+        .def("isObstacle",         &GridEnvironment::isObstacle);
 }

@@ -9,3 +9,5 @@ pathplanning_classical
 build/
 __pycache__/
 *.pyc
+*.pth
+.claude/

@@ -40,6 +40,11 @@ public:
     // Formatted table comparing all algorithm results.
     static void displaySummaryTable(const std::vector<PathResult>& results);
 
+    // Final unified table — classical algorithms + RL agents side by side.
+    // rlResults: list of {name, pathLength} pairs (-1 = no path found).
+    static void displayFinalSummary(const std::vector<PathResult>&                  classical,
+                                    const std::vector<std::pair<std::string, int>>& rlResults);
+
     // ---- Section formatting -------------------------------------------------
 
     // Print a titled divider spanning 60 chars: "====== Title ======"

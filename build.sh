@@ -9,6 +9,9 @@
 #   ./build.sh 3      — Python .so binding via setup.py
 #   ./build.sh 4      — DQN deep RL training (Python/PyTorch)
 #   ./build.sh 5      — tabular RL training curves (matplotlib)
+#   ./build.sh 6      — Phase 6: BC training  (imitation learning)
+#   ./build.sh 7      — Phase 6: DAgger training
+#   ./build.sh 8      — Phase 6: benchmark all imitation policies
 
 TARGET=${1:-2}
 
@@ -82,8 +85,32 @@ case $TARGET in
     python training_curves.py
     ;;
 
+  6)
+    echo "==> Running Behavioral Cloning training..."
+    # Requires: ./build.sh 3 first, pip install torch
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_bc.py
+    ;;
+
+  7)
+    echo "==> Running DAgger training..."
+    # Requires: ./build.sh 3 first, pip install torch
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_dagger.py
+    ;;
+
+  8)
+    echo "==> Running imitation learning benchmark..."
+    # Requires: ./build.sh 6 and ./build.sh 7 first (generates bc_model.pth, dagger_model.pth)
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/benchmark_imitation.py
+    ;;
+
   *)
-    echo "Unknown target '$TARGET'. Valid: 1 2 3 4 5"
+    echo "Unknown target '$TARGET'. Valid: 1 2 3 4 5 6 7 8"
     exit 1
     ;;
 

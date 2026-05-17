@@ -38,9 +38,9 @@ HIDDEN_SIZE   = 128
 EPISODES      = 2000
 MAX_STEPS     = GRID_WIDTH * GRID_HEIGHT * 4
 
-LEARNING_RATE = 0.0003  # lower than DQN — PPO updates are already conservative
+LEARNING_RATE = 0.0003
 GAMMA         = 0.95
-PPO_EPOCHS    = 4       # gradient steps per collected episode
+PPO_EPOCHS    = 4
 
 # ---- Helpers ----------------------------------------------------------------
 
@@ -61,7 +61,6 @@ def train():
 
     for episode in range(1, EPISODES + 1):
 
-        # -- Trajectory buffers (reset each episode) --------------------------
         states_list    = []
         actions_list   = []
         log_probs_list = []
@@ -69,38 +68,48 @@ def train():
         dones_list     = []
         values_list    = []
 
-        # -- Collect one episode ----------------------------------------------
         state        = env.reset()
         state_tensor = state_to_tensor(state, GRID_WIDTH, GRID_HEIGHT, env)
         episode_reward = 0.0
 
         for step in range(MAX_STEPS):
-            # TODO: call agent.select_action(state_tensor) → action, log_prob, value
-            # TODO: call env.step(action) → result
-            # TODO: unpack result into next_state, reward, done
-            # TODO: append state_tensor, action, log_prob, reward, done, value to lists
-            # TODO: update episode_reward
-            # TODO: advance state_tensor
-            # TODO: if done: break
-            pass
+            action, log_prob, value = agent.select_action(state_tensor)
 
-        # -- Compute returns and advantages -----------------------------------
-        # TODO: returns    = agent.compute_returns(rewards_list, dones_list)
-        # TODO: values_tensor = torch.cat(values_list).squeeze()
-        # TODO: advantages = returns - values_tensor.detach()
-        # TODO: normalise advantages: (advantages - mean) / (std + 1e-8)
+            result     = env.step(action)
+            next_state = result.newPosition
+            reward     = result.reward
+            done       = result.done
 
-        # -- Stack trajectory into tensors ------------------------------------
-        # TODO: states_tensor    = torch.cat(states_list)
-        # TODO: actions_tensor   = torch.LongTensor(actions_list)
-        # TODO: log_probs_tensor = torch.stack(log_probs_list).detach()
+            states_list.append(state_tensor)
+            actions_list.append(action)
+            log_probs_list.append(log_prob)
+            rewards_list.append(reward)
+            dones_list.append(done)
+            values_list.append(value)
 
-        # -- Update policy ----------------------------------------------------
-        # TODO: loss = agent.update(states_tensor, actions_tensor,
-        #                           log_probs_tensor, returns, advantages)
+            episode_reward += reward
+            state_tensor    = state_to_tensor([next_state.x, next_state.y],
+                                               GRID_WIDTH, GRID_HEIGHT, env)
+            if done:
+                break
+
+        if len(rewards_list) == 0:
+            continue
+
+        returns       = agent.compute_returns(rewards_list, dones_list)
+        values_tensor = torch.cat(values_list).squeeze()
+        advantages    = returns - values_tensor.detach()
+        advantages    = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        states_tensor    = torch.cat(states_list)
+        actions_tensor   = torch.LongTensor(actions_list)
+        log_probs_tensor = torch.stack(log_probs_list).detach()
+
+        loss = agent.update(states_tensor, actions_tensor,
+                            log_probs_tensor, returns, advantages)
 
         if episode % 10 == 0 or episode <= 20:
-            print(f"Episode {episode} | Reward: {episode_reward:.1f}")
+            print(f"Episode {episode:4d} | Reward: {episode_reward:8.1f} | Loss: {loss:.4f}")
 
 
 if __name__ == "__main__":

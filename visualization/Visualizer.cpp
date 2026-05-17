@@ -125,6 +125,66 @@ void Visualizer::displaySummaryTable(const vector<PathResult>& results)
     cout << "--------------|-------------|--------|-----------|---------------\n";
 }
 
+void Visualizer::displayFinalSummary(const std::vector<PathResult>&                  classical,
+                                      const std::vector<std::pair<std::string, int>>& rlResults)
+{
+    const int W_NAME  = 20;
+    const int W_CAT   = 13;
+    const int W_PATH  =  7;
+    const int W_COST  =  9;
+    const int W_TIME  =  9;
+    const int W_NODES = 10;
+
+    auto sep = [&]() {
+        cout << string(W_NAME,'-') << "+"
+             << string(W_CAT, '-') << "+"
+             << string(W_PATH,'-') << "+"
+             << string(W_COST,'-') << "+"
+             << string(W_TIME,'-') << "+"
+             << string(W_NODES,'-') << "\n";
+    };
+
+    cout << "\n";
+    cout << padTo("Algorithm",           W_NAME) << "|"
+         << padTo(" Category",           W_CAT)  << "|"
+         << padTo(" Path",               W_PATH)  << "|"
+         << padTo(" Cost",               W_COST)  << "|"
+         << padTo(" Time ms",            W_TIME)  << "|"
+         << padTo(" Nodes",              W_NODES) << "\n";
+    sep();
+
+    for (const auto& r : classical)
+    {
+        string name   = " " + r.algorithmName;
+        string path   = r.path.empty() ? "  N/A" : "  " + to_string((int)r.path.size());
+        string cost   = r.path.empty() ? "  N/A" : "  " + to_string((int)r.pathCost);
+        string timeMs = "  " + to_string(r.elapsedMs).substr(0, 5);
+        string nodes  = "  " + to_string(r.nodesExplored);
+
+        cout << padTo(name,    W_NAME) << "|"
+             << padTo(" Classical",  W_CAT)  << "|"
+             << padTo(path,   W_PATH)  << "|"
+             << padTo(cost,   W_COST)  << "|"
+             << padTo(timeMs, W_TIME)  << "|"
+             << padTo(nodes,  W_NODES) << "\n";
+    }
+
+    sep();
+
+    for (const auto& [name, pathLen] : rlResults)
+    {
+        string pathStr = (pathLen < 0) ? "  N/A" : "  " + to_string(pathLen);
+        cout << padTo(" " + name,   W_NAME) << "|"
+             << padTo(" Tabular RL", W_CAT)  << "|"
+             << padTo(pathStr,       W_PATH)  << "|"
+             << padTo("  N/A",       W_COST)  << "|"
+             << padTo("  N/A",       W_TIME)  << "|"
+             << padTo("  N/A",       W_NODES) << "\n";
+    }
+
+    sep();
+}
+
 // ---- Section formatting -----------------------------------------------------
 
 void Visualizer::printSection(const string& title)

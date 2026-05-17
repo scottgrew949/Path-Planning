@@ -209,17 +209,17 @@ PHASE 4b — Dyna-Q (model-based RL)
   [x] Benchmark vs tabular     — sample efficiency comparison
 
 PHASE 5 — Policy Gradient: PPO / Actor-Critic
-  [ ] Actor network            — outputs action probability distribution
-  [ ] Critic network           — estimates state value V(s)
-  [ ] Advantage estimation     — A(s,a) = Q(s,a) - V(s)
-  [ ] PPO clipping             — stable policy update
+  [x] Actor network            — outputs action probability distribution
+  [x] Critic network           — estimates state value V(s)
+  [x] Advantage estimation     — A(s,a) = Q(s,a) - V(s)
+  [x] PPO clipping             — stable policy update
   [ ] Compare vs DQN
 
 PHASE 6 — Imitation Learning
-  [ ] Expert demonstration     — A* generates optimal trajectory dataset
-  [ ] Behavioural cloning      — supervised learning to mimic A* decisions
-  [ ] DAgger                   — iterative imitation with expert queries
-  [ ] Benchmark vs random init
+  [x] Expert demonstration     — A* generates optimal trajectory dataset
+  [x] Behavioural cloning      — supervised learning to mimic A* decisions
+  [x] DAgger                   — iterative imitation with expert queries
+  [x] Benchmark vs random init
 
 PHASE 7 — Curriculum Learning + Benchmarking
   [ ] Curriculum scheduler     — easy mazes first, increase difficulty over training
@@ -283,5 +283,16 @@ PHASE 12 — OpenStreetMap Integration
   ./build.sh 5   — Tabular RL training curves (matplotlib)
                    Requires: pathplanning run first (generates CSVs)
                    Output: training_curves.png
+
+  ./build.sh 6   — Behavioral Cloning training (imitation learning)
+                   Requires: build.sh 3 done, pip install torch
+                   Output: bc_model.pth
+
+  ./build.sh 7   — DAgger training (iterative imitation learning)
+                   Requires: build.sh 3 done, pip install torch
+                   Output: dagger_model.pth
+
+  ./build.sh 8   — Imitation learning benchmark (Random vs BC vs DAgger vs Expert)
+                   Requires: build.sh 6 and 7 done
 
 ================================================================================

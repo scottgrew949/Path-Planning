@@ -28,6 +28,7 @@
 
 import torch
 import torch.nn as nn
+from torch.distributions import Categorical
 from networks.actor_critic import ActorCriticNetwork
 
 CLIP_EPSILON = 0.2   # standard PPO clip range
@@ -42,25 +43,24 @@ class PPOAgent:
                  epochs:        int):
         self.network       = network
         self.gamma         = gamma
-        self.epochs        = epochs   # how many gradient steps per collected trajectory
+        self.epochs        = epochs
         self.optimizer     = torch.optim.Adam(network.parameters(), lr=learning_rate)
 
     def select_action(self, state_tensor: torch.Tensor):
-        # TODO: call network(state_tensor) → action_probs, value
-        # TODO: create torch.distributions.Categorical(action_probs)
-        # TODO: sample action from distribution
-        # TODO: compute log_prob of sampled action
-        # TODO: return action.item(), log_prob, value
-        pass
+        action_probs, value = self.network(state_tensor)
+        dist                = Categorical(action_probs)
+        action              = dist.sample()
+        log_prob            = dist.log_prob(action)
+        return action.item(), log_prob, value
 
     def compute_returns(self, rewards: list, dones: list) -> torch.Tensor:
-        # TODO: walk rewards list in reverse, accumulate discounted return
-        #       G = 0
-        #       for each step from last to first:
-        #           if done: G = 0
-        #           G = reward + gamma * G
-        #           prepend G to returns list
-        
+        returns = []
+        G = 0.0
+        for reward, done in zip(reversed(rewards), reversed(dones)):
+            if done:
+                G = 0.0
+            G = reward + self.gamma * G
+            returns.insert(0, G)
         return torch.FloatTensor(returns)
 
     def update(self,
@@ -69,19 +69,25 @@ class PPOAgent:
                log_probs:  torch.Tensor,
                returns:    torch.Tensor,
                advantages: torch.Tensor) -> float:
-        # TODO: loop self.epochs times:
-        #   new_action_probs, new_values = network(states)
-        #   dist = Categorical(new_action_probs)
-        #   new_log_probs = dist.log_prob(actions)
-        #   entropy = dist.entropy().mean()
-        #
-        #   ratio = exp(new_log_probs - old log_probs)
-        #   clipped = clip(ratio, 1-CLIP_EPSILON, 1+CLIP_EPSILON)
-        #   actor_loss = -min(ratio * advantages, clipped * advantages).mean()
-        #
-        #   critic_loss = MSE(new_values.squeeze(), returns)
-        #
-        #   loss = actor_loss + 0.5 * critic_loss - ENTROPY_COEF * entropy
-        #   optimizer step
-        # TODO: return loss.item()
-        pass
+        total_loss = 0.0
+        for _ in range(self.epochs):
+            new_action_probs, new_values = self.network(states)
+            dist          = Categorical(new_action_probs)
+            new_log_probs = dist.log_prob(actions)
+            entropy       = dist.entropy().mean()
+
+            ratio       = torch.exp(new_log_probs - log_probs)
+            clipped     = torch.clamp(ratio, 1.0 - CLIP_EPSILON, 1.0 + CLIP_EPSILON)
+            actor_loss  = -torch.min(ratio * advantages, clipped * advantages).mean()
+
+            critic_loss = nn.functional.mse_loss(new_values.squeeze(), returns)
+
+            loss = actor_loss + 0.5 * critic_loss - ENTROPY_COEF * entropy
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            total_loss = loss.item()
+
+        return total_loss

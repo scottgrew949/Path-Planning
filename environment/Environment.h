@@ -36,7 +36,7 @@ public:
     // Fill obstacles randomly; obstacleDensity in [0.0, 1.0].
     // Uses std::mt19937 seeded from std::random_device.
     void generateRandom(double obstacleDensity);
-    void generateLabyrinth(double loopDensity);
+    void generateLabyrinth(double loopDensity, unsigned seed = 0);
 
     // ---- Mutation ---------------------------------------------------------
 

@@ -96,13 +96,13 @@ void Environment::loadFromFile([[maybe_unused]] const string& filename)
     // TODO: validate parsed dimensions match width_ and height_
 }
 
-void Environment::generateLabyrinth(double loopDensity)
+void Environment::generateLabyrinth(double loopDensity, unsigned seed)
 {
     for (int x = 0; x < width_; x++)
         for (int y = 0; y < height_; y++)
                 setObstacle(Position(x, y));
 
-    mt19937 randomEngine(random_device{}());
+    mt19937 randomEngine(seed != 0 ? seed : random_device{}());
     function<void(Position)> carvePassages = [&](Position current)
     {
         vector<Position> neighborsOfCurrent;

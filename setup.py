@@ -17,6 +17,8 @@ cpp_sources = [
     "core/Types.cpp",
     "environment/Cell.cpp",
     "environment/Environment.cpp",
+    "planning/algorithms/AStar.cpp",
+    "rl/RLAgent.cpp",
     "rl/RLEnvironment.cpp",
     "rl/QTable.cpp",
     "rl/QLearningAgent.cpp",

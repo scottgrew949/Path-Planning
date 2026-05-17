@@ -165,6 +165,9 @@ int main()
     // Wrap the grid in a gym-style interface
     RLEnvironment rlEnv(env);
 
+    // Collect RL greedy path lengths for final summary table
+    vector<pair<string,int>> rlSummary;
+
     // Shared hyperparameters for both agents:
     //   learningRate  = 0.1   — small, stable updates
     //   discountFactor= 0.95  — values long-term reward (goal is far away)
@@ -227,10 +230,12 @@ int main()
         if (learnedPath.empty())
         {
             cout << "\nAgent did not learn a complete path. Try more episodes.\n";
+            rlSummary.push_back({"Q-Learning", -1});
         }
         else
         {
             cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
+            rlSummary.push_back({"Q-Learning", (int)learnedPath.size()});
         }
     }
 
@@ -288,12 +293,20 @@ int main()
         if (learnedPath.empty())
         {
             cout << "\nAgent did not learn a complete path. Try more episodes.\n";
+            rlSummary.push_back({"Dyna-Q (n=10)", -1});
         }
         else
         {
             cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
+            rlSummary.push_back({"Dyna-Q (n=10)", (int)learnedPath.size()});
         }
     }
+
+    // =========================================================================
+    // Section 6: Final unified comparison
+    // =========================================================================
+    Visualizer::printSection("Full System Comparison");
+    Visualizer::displayFinalSummary(results, rlSummary);
 
     return 0;
 }
