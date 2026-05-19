@@ -222,10 +222,10 @@ PHASE 6 — Imitation Learning
   [x] Benchmark vs random init
 
 PHASE 7 — Curriculum Learning + Benchmarking
-  [ ] Curriculum scheduler     — easy mazes first, increase difficulty over training
-  [ ] Statistical benchmark    — 1000 random seeds, mean path length, success rate
-  [ ] benchmark_plot.py        — bar chart comparing all algorithms
-  [ ] Classical vs RL analysis
+  [x] Curriculum scheduler     — easy mazes first, increase difficulty over training
+  [x] Statistical benchmark    — 1000 random seeds, mean path length, success rate
+  [x] benchmark_plot.py        — bar chart comparing all algorithms
+  [x] Classical vs RL analysis
 
 PHASE 8 — Dynamic Obstacles + Partial Observability
   [ ] DynamicEnvironment       — obstacles that move each timestep

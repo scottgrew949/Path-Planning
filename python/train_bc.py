@@ -22,62 +22,77 @@ from agents.bc_agent import BCAgent, encode_state
 
 # ---- Hyperparameters --------------------------------------------------------
 
-GRID_WIDTH    = 201
+GRID_WIDTH    = 41
 GRID_HEIGHT   = 41
+GOAL_X        = 38
+GOAL_Y        = 40
+LOOP_DENSITY  = 0.3
 STATE_SIZE    = 6
 ACTION_SIZE   = 4
 HIDDEN_SIZE   = 128
 LEARNING_RATE = 1e-3
 
+N_TRAIN_MAZES     = 100   # diverse maze seeds for training
+N_EVAL_MAZES      = 50    # held-out seeds (never seen during training)
 TRAIN_EPOCHS      = 2000
 LOG_EVERY         = 200
-N_EVAL_EPISODES   = 50
-MAX_EVAL_STEPS    = 2000
+MAX_EVAL_STEPS    = 500
 
 # ---- Training loop ----------------------------------------------------------
 
 def train():
-    env = pathplanning.GridEnvironment(GRID_WIDTH, GRID_HEIGHT, 0, 0, 200, 40, 0.4, 42)
-    goal = env.getGoal()
-    gx, gy = goal[0], goal[1]
+    states_list  = []
+    actions_list = []
 
-    # -- Step 1: collect expert trajectory ------------------------------------
-    raw = env.getExpertTrajectory()   # flat list [x0,y0,a0, x1,y1,a1, ...]
-    if len(raw) == 0:
-        print("WARNING: expert trajectory is empty — no path found. Exiting.")
-        return
+    # -- Step 1: collect expert trajectories from N diverse mazes -------------
+    print(f"Collecting expert trajectories from {N_TRAIN_MAZES} mazes...")
+    for seed in range(N_TRAIN_MAZES):
+        env  = pathplanning.GridEnvironment(
+            GRID_WIDTH, GRID_HEIGHT, 0, 0, GOAL_X, GOAL_Y, LOOP_DENSITY, seed)
+        goal = env.getGoal()
+        gx, gy = int(goal[0]), int(goal[1])
 
-    triples = [(int(raw[i]), int(raw[i + 1]), int(raw[i + 2]))
-               for i in range(0, len(raw), 3)]
+        raw = env.getExpertTrajectory()
+        if len(raw) == 0:
+            continue
+        for i in range(0, len(raw), 3):
+            x, y, a = int(raw[i]), int(raw[i + 1]), int(raw[i + 2])
+            states_list.append(encode_state(x, y, gx, gy, GRID_WIDTH, GRID_HEIGHT,
+                                            env.getLineOfSight(x, y)))
+            actions_list.append(a)
 
-    # -- Step 2: build dataset ------------------------------------------------
-    states  = torch.cat([encode_state(x, y, gx, gy, GRID_WIDTH, GRID_HEIGHT,
-                                      env.getLineOfSight(x, y))
-                         for x, y, _ in triples])
-    actions = torch.LongTensor([a for _, _, a in triples])
+        if (seed + 1) % 20 == 0:
+            print(f"  {seed + 1}/{N_TRAIN_MAZES} mazes — {len(actions_list)} samples")
 
-    print(f"Expert trajectory: {len(triples)} steps")
+    print(f"Dataset: {len(actions_list)} (state, action) pairs")
 
-    # -- Step 3: train --------------------------------------------------------
-    agent = BCAgent(STATE_SIZE, ACTION_SIZE, HIDDEN_SIZE, LEARNING_RATE)
+    # -- Step 2: train --------------------------------------------------------
+    states  = torch.cat(states_list)
+    actions = torch.LongTensor(actions_list)
+    agent   = BCAgent(STATE_SIZE, ACTION_SIZE, HIDDEN_SIZE, LEARNING_RATE)
 
     for epoch in range(1, TRAIN_EPOCHS + 1):
         loss = agent.update(states, actions)
         if epoch % LOG_EVERY == 0:
             print(f"Epoch {epoch:5d} | Loss: {loss:.4f}")
 
-    # -- Step 4: evaluate -----------------------------------------------------
+    # -- Step 3: evaluate on held-out seeds (agent has never seen these mazes)
     successes   = 0
     total_steps = 0
+    eval_seeds  = range(N_TRAIN_MAZES, N_TRAIN_MAZES + N_EVAL_MAZES)
 
-    for _ in range(N_EVAL_EPISODES):
-        pos  = env.reset()   # [x, y]
+    for seed in eval_seeds:
+        env  = pathplanning.GridEnvironment(
+            GRID_WIDTH, GRID_HEIGHT, 0, 0, GOAL_X, GOAL_Y, LOOP_DENSITY, seed)
+        goal = env.getGoal()
+        gx, gy = int(goal[0]), int(goal[1])
+        pos  = env.reset()
         done = False
         for step in range(MAX_EVAL_STEPS):
             los     = env.getLineOfSight(int(pos[0]), int(pos[1]))
             state_t = encode_state(pos[0], pos[1], gx, gy, GRID_WIDTH, GRID_HEIGHT, los)
             action  = agent.select_action(state_t)
-            result  = env.step(action)   # [new_x, new_y, reward, done_float]
+            result  = env.step(action)
             pos     = [result[0], result[1]]
             if result[3] > 0.5:
                 successes   += 1
@@ -88,10 +103,10 @@ def train():
             total_steps += MAX_EVAL_STEPS
 
     avg_steps = total_steps / successes if successes > 0 else float("nan")
-    print(f"BC success rate: {successes}/{N_EVAL_EPISODES}")
+    print(f"BC success rate (held-out mazes): {successes}/{N_EVAL_MAZES}")
     print(f"Average steps to goal: {avg_steps:.1f}")
 
-    # -- Step 5: save ---------------------------------------------------------
+    # -- Step 4: save ---------------------------------------------------------
     torch.save(agent.network.state_dict(), "bc_model.pth")
     print("Saved bc_model.pth")
 

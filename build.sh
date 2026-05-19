@@ -12,6 +12,8 @@
 #   ./build.sh 6      — Phase 6: BC training  (imitation learning)
 #   ./build.sh 7      — Phase 6: DAgger training
 #   ./build.sh 8      — Phase 6: benchmark all imitation policies
+#   ./build.sh 9      — Phase 7: statistical benchmark (1000 seeds)
+#   ./build.sh 10     — Phase 7: benchmark plots (bar charts + classical vs RL)
 
 TARGET=${1:-2}
 
@@ -55,6 +57,7 @@ case $TARGET in
         planning/algorithms/RRT.cpp \
         rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
         rl/QTable.cpp rl/RLEnvironment.cpp \
+        planning/CurriculumScheduler.cpp \
         utils/ProbabilityUtils.cpp \
         visualization/Visualizer.cpp \
         -o pathplanning
@@ -109,8 +112,24 @@ case $TARGET in
     python python/benchmark_imitation.py
     ;;
 
+  9)
+    echo "==> Running Phase 7 statistical benchmark (1000 seeds)..."
+    # Requires: ./build.sh 3 first (pybind .so), bc_model.pth + dagger_model.pth optional
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/statistical_benchmark.py
+    ;;
+
+  10)
+    echo "==> Plotting Phase 7 benchmark results..."
+    # Requires: ./build.sh 9 first (generates benchmark_results.csv)
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/benchmark_plot.py
+    ;;
+
   *)
-    echo "Unknown target '$TARGET'. Valid: 1 2 3 4 5 6 7 8"
+    echo "Unknown target '$TARGET'. Valid: 1 2 3 4 5 6 7 8 9 10"
     exit 1
     ;;
 

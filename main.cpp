@@ -23,7 +23,6 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <map>
 #include <memory>
 #include <chrono>
 #include <string>
@@ -45,6 +44,7 @@
 #include "rl/RLEnvironment.h"
 #include "rl/QLearningAgent.h"
 #include "rl/DynaQAgent.h"
+#include "planning/CurriculumScheduler.h"
 
 using namespace std;
 
@@ -183,6 +183,11 @@ int main()
     const int numEpisodes        = 10000;
     const int maxStepsPerEpisode = rlEnv.getWidth() * rlEnv.getHeight() * 4;
 
+    CurriculumScheduler sched(numEpisodes);
+    cout << "\nCurriculum Learning Schedule:\n";
+    sched.printSchedule();
+    cout << "\n";
+
     // ---- Q-Learning ---------------------------------------------------------
     {
         QLearningAgent agent(rlEnv, learningRate, discountFactor,
@@ -197,6 +202,11 @@ int main()
         trainingHistory.reserve(numEpisodes);
         for (int ep = 1; ep <= numEpisodes; ++ep)
         {
+            if (sched.isStageTransition(ep - 1)) {
+                const auto& stage = sched.getStageForEpisode(ep - 1);
+                env.generateLabyrinth(stage.loopDensity, static_cast<unsigned>(stage.stageIndex + 1) * 37u);
+                rlEnv.reset();
+            }
             TrainingResult r = agent.runEpisode(ep, maxStepsPerEpisode);
             trainingHistory.push_back(r);
             if (ep % 1000 == 0)
@@ -223,19 +233,20 @@ int main()
             cout << "Training data written to qlearning_training.csv\n";
         }
 
-        // Reset rlEnv so extractGreedyPath starts from the true start position
-        rlEnv.reset();
-        vector<Position> learnedPath = agent.extractGreedyPath(maxStepsPerEpisode);
+        int bestQLSteps = -1;
+        for (const TrainingResult& result : trainingHistory)
+            if (result.goalReached && (bestQLSteps == -1 || result.stepsToGoal < bestQLSteps))
+                bestQLSteps = result.stepsToGoal;
 
-        if (learnedPath.empty())
+        if (bestQLSteps == -1)
         {
-            cout << "\nAgent did not learn a complete path. Try more episodes.\n";
+            cout << "\nAgent did not reach goal in any episode.\n";
             rlSummary.push_back({"Q-Learning", -1});
         }
         else
         {
-            cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
-            rlSummary.push_back({"Q-Learning", (int)learnedPath.size()});
+            cout << "\nBest path length during training: " << bestQLSteps << " steps\n";
+            rlSummary.push_back({"Q-Learning", bestQLSteps});
         }
     }
 
@@ -260,6 +271,11 @@ int main()
         trainingHistory.reserve(numEpisodes);
         for (int ep = 1; ep <= numEpisodes; ++ep)
         {
+            if (sched.isStageTransition(ep - 1)) {
+                const auto& stage = sched.getStageForEpisode(ep - 1);
+                env.generateLabyrinth(stage.loopDensity, static_cast<unsigned>(stage.stageIndex + 1) * 37u);
+                rlEnv.reset();
+            }
             TrainingResult r = agent.runEpisode(ep, maxStepsPerEpisode);
             trainingHistory.push_back(r);
             if (ep % 1000 == 0)
@@ -286,19 +302,20 @@ int main()
             cout << "Training data written to dynaq_training.csv\n";
         }
 
-        // Reset rlEnv so extractGreedyPath starts from the true start position
-        rlEnv.reset();
-        vector<Position> learnedPath = agent.extractGreedyPath(maxStepsPerEpisode);
+        int bestDQSteps = -1;
+        for (const TrainingResult& result : trainingHistory)
+            if (result.goalReached && (bestDQSteps == -1 || result.stepsToGoal < bestDQSteps))
+                bestDQSteps = result.stepsToGoal;
 
-        if (learnedPath.empty())
+        if (bestDQSteps == -1)
         {
-            cout << "\nAgent did not learn a complete path. Try more episodes.\n";
+            cout << "\nAgent did not reach goal in any episode.\n";
             rlSummary.push_back({"Dyna-Q (n=10)", -1});
         }
         else
         {
-            cout << "\nLearned path length: " << learnedPath.size() << " steps\n";
-            rlSummary.push_back({"Dyna-Q (n=10)", (int)learnedPath.size()});
+            cout << "\nBest path length during training: " << bestDQSteps << " steps\n";
+            rlSummary.push_back({"Dyna-Q (n=10)", bestDQSteps});
         }
     }
 
