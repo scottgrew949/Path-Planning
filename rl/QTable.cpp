@@ -1,7 +1,6 @@
 // rl/QTable.cpp
 #include "QTable.h"
 #include <algorithm>
-#include <stdexcept>
 
 // ---- Constructor ------------------------------------------------------------
 
@@ -21,10 +20,8 @@ QTable::QTable(int width, int height)
 
 double QTable::getValue(const Position& position, Action action) const
 {
-    // TODO: if found, return the element at index static_cast<int>(action)
-    // TODO: if not found, return 0.0
-    //       — unseen states have Q-value 0.0 by convention (optimistic initialisation
-    //         would use a positive value, but 0.0 is the standard starting point)
+    // Unseen states return 0.0 — optimistic initialisation would use a positive value,
+    // but 0.0 is the standard starting point.
     std::unordered_map<Position, std::array<double, 4>, PositionHash>::const_iterator it = table_.find(position);
     if (it == table_.end()) return 0.0;
     return it->second[static_cast<int>(action)];
@@ -32,10 +29,7 @@ double QTable::getValue(const Position& position, Action action) const
 
 void QTable::setValue(const Position& position, Action action, double value)
 {
-    table_[position][static_cast<int>(action)] = value;    
-    //       (intentional: setValue is always called after the agent has visited the state,
-    //        so insertion is correct here, unlike getValue where we want read-only access)
-    // TODO: assign value to index static_cast<int>(action) in that array
+    table_[position][static_cast<int>(action)] = value;
 }
 
 // ---- Policy helpers ---------------------------------------------------------

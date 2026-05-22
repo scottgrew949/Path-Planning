@@ -33,7 +33,7 @@ void Environment::setObstacle(const Position& p)
 
 void Environment::clearObstacle(const Position& p)
 {
-    if (inBounds(p))
+    if (inBounds(p) && p != startPos_ && p != goalPos_)
     {
         grid_[p.x][p.y].setCellType(CellType::EMPTY);
         syncObstacleBit(p, false);
@@ -58,6 +58,11 @@ void Environment::setGoal(const Position& p)
         grid_[p.x][p.y].setCellType(CellType::GOAL);
         goalPos_ = p;
     }
+}
+
+void Environment::setTurnPenalty(double penalty)
+{
+    turnPenalty_ = penalty;
 }
 
 void Environment::markVisited(const Position& p)
@@ -143,6 +148,7 @@ void Environment::generateLabyrinth(double loopDensity, unsigned seed)
 
     setStart(startPos_);
     setGoal(goalPos_);
+    reset();
 }
 
 // Simpler less random sprinkling of obstacles
@@ -211,6 +217,9 @@ vector<Position> Environment::getNeighbors(const Position& p) const
 
 double Environment::moveCost(const Position& previous, const Position& current, const Position& next) const
 {
+    if (previous == current)
+        return 1.0;
+
     int directionX1 = current.x - previous.x;
     int directionY1 = current.y - previous.y;
     int directionX2 = next.x - current.x;

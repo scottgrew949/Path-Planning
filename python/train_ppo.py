@@ -76,9 +76,9 @@ def train():
             action, log_prob, value = agent.select_action(state_tensor)
 
             result     = env.step(action)
-            next_state = result.newPosition
-            reward     = result.reward
-            done       = result.done
+            next_state = [int(result[0]), int(result[1])]
+            reward     = result[2]
+            done       = result[3] > 0.5
 
             states_list.append(state_tensor)
             actions_list.append(action)
@@ -88,8 +88,7 @@ def train():
             values_list.append(value)
 
             episode_reward += reward
-            state_tensor    = state_to_tensor([next_state.x, next_state.y],
-                                               GRID_WIDTH, GRID_HEIGHT, env)
+            state_tensor    = state_to_tensor(next_state, GRID_WIDTH, GRID_HEIGHT, env)
             if done:
                 break
 

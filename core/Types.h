@@ -30,7 +30,8 @@ enum class AlgorithmType
     DSTAR_LITE,
     THETA_STAR,
     JPS,
-    RRT
+    RRT,
+    NEURAL_ASTAR  // learned heuristic — planning/hybrid/NeuralAStar
 };
 
 // ---- PathResult -------------------------------------------------------------

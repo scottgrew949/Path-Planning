@@ -228,10 +228,10 @@ PHASE 7 — Curriculum Learning + Benchmarking
   [x] Classical vs RL analysis
 
 PHASE 8 — Dynamic Obstacles + Partial Observability
-  [ ] DynamicEnvironment       — obstacles that move each timestep
-  [ ] SensorModel              — agent sees only within radius R
-  [ ] D* Lite integration      — replan each frame
-  [ ] RL local policy          — handle dynamic agents classical planner cannot predict
+  [x] DynamicEnvironment       — obstacles that move each timestep
+  [x] SensorModel              — agent sees only within radius R
+  [x] D* Lite integration      — replan each frame
+  [x] RL local policy          — handle dynamic agents classical planner cannot predict
 
 PHASE 9 — Neural A* (Hybrid Classical-RL)
   [ ] Learned heuristic        — neural net replaces Manhattan distance

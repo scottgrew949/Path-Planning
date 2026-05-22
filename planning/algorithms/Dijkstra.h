@@ -76,7 +76,7 @@ private:
     std::unordered_map<Position, Position, PositionHash> arrivedFrom_;
     std::unordered_set<Position,           PositionHash> finalized_;
 
-    int nodesExplored_;
+    int nodesExplored_ = 0;
 
     void   clearState();
     double costFromStartTo(const Position& p) const;   // costFromStart_[p] or +∞

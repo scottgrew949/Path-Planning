@@ -56,11 +56,11 @@ string Visualizer::padTo(const string& str, int width)
 
 void Visualizer::displayGrid(const Environment& env)
 {
-    auto rows = renderGrid(env, {});
+    vector<string> rows = renderGrid(env, {});
 
     cout << "Grid (" << env.getHeight() << " x " << env.getWidth() << ")\n";
     printHorizontalBorder(env.getWidth());
-    for(const auto& r : rows)
+    for (const string& r : rows)
     {
         cout << '|' << r << "|\n";
     }
@@ -78,10 +78,10 @@ void Visualizer::displayPath(const Environment&      env,
         cout << "  [no path found]\n"; 
     else
     {
-        auto rows = renderGrid(env, path);
+        vector<string> rows = renderGrid(env, path);
         printHorizontalBorder(env.getWidth());
 
-    for(const auto& r : rows)
+    for (const string& r : rows)
     {
         cout << '|' << r << "|\n";
     }
@@ -114,7 +114,7 @@ void Visualizer::displaySummaryTable(const vector<PathResult>& results)
 {
     cout << "Algorithm     | Path Length | Cost   | Time (ms) | Nodes Explored\n";
     cout << "--------------|-------------|--------|-----------|---------------\n";
-    for (auto& r : results)
+    for (const PathResult& r : results)
     {
         int    length  = r.path.size();
         double cost    = r.pathCost;
@@ -153,7 +153,7 @@ void Visualizer::displayFinalSummary(const std::vector<PathResult>&             
          << padTo(" Nodes",              W_NODES) << "\n";
     sep();
 
-    for (const auto& r : classical)
+    for (const PathResult& r : classical)
     {
         string name   = " " + r.algorithmName;
         string path   = r.path.empty() ? "  N/A" : "  " + to_string((int)r.path.size());

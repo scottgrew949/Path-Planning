@@ -66,15 +66,12 @@ vector<Position> Dijkstra::findPath(const Environment& env,
         // grab the cheapest node
         DijkstraNode current = unexploredNodes.top();
         unexploredNodes.pop();
-        ++nodesExplored_;
 
-        // same node may have been pushed multiple times with different costs
-        // if already finalized, this is a stale entry — skip it
         if (finalized_.count(current.pos))
             continue;
 
-        // optimal cost for this node is now confirmed — lock it in
         finalized_.insert(current.pos);
+        ++nodesExplored_;
 
         // reached the goal via cheapest path — reconstruct and return
         if (current.pos == goal)

@@ -27,14 +27,12 @@ double ProbabilityUtils::bayesUpdateSensor(double priorObstacleProbability,
                                            double falsePositiveRate,
                                            bool   sensorFired)
 {
-    // TODO: validate prior, truePositiveRate, falsePositiveRate in [0, 1]
     if (priorObstacleProbability > 1.0 || priorObstacleProbability < 0.0)
         throw std::invalid_argument("Invalid priorObstacleProbability");
     else if (truePositiveRate > 1.0 || truePositiveRate < 0.0)
         throw std::invalid_argument("Invalid TruePositiveRate");
     else if (falsePositiveRate > 1.0 || falsePositiveRate < 0.0)
         throw std::invalid_argument("Invalid FalsePositiveRate");
-    // TODO: compute likelihood and marginal depending on sensorFired:
 
     double sensorReadingProbability = 0.0;
     double totalSensorReadingProbability   = 0.0;

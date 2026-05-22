@@ -22,13 +22,13 @@
 #   the network is chasing a moving goalpost. Freezing target for N steps
 #   stabilises training. Main network converges toward a fixed reference.
 
-from replay_buffer import ReplayBuffer
-from dqn_network   import DQNNetwork
-from value_heatmap import plot_value_heatmap
-
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from replay_buffer import ReplayBuffer
+from dqn_network   import DQNNetwork
+from value_heatmap import plot_value_heatmap
 
 import torch
 import torch.nn as nn

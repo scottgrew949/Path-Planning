@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./build.sh        — full C++ binary (all algorithms + tabular RL)
-#   ./build.sh 1      — classical pathfinding only (no RL)
+#   ./build.sh 1      — full binary with debug symbols (-g, no -O2)
 #   ./build.sh 2      — full C++ binary (default)
 #   ./build.sh 3      — Python .so binding via setup.py
 #   ./build.sh 4      — DQN deep RL training (Python/PyTorch)
@@ -20,12 +20,13 @@ TARGET=${1:-2}
 case $TARGET in
 
   1)
-    echo "==> Building classical pathfinding only..."
+    echo "==> Building full binary with debug symbols..."
     set -e
-    g++ -std=c++17 -Wall -Wextra -O2 \
+    g++ -std=c++17 -Wall -Wextra -g \
         main.cpp \
         core/Position.cpp core/Types.cpp \
         environment/Cell.cpp environment/Environment.cpp \
+        environment/DynamicEnvironment.cpp environment/SensorModel.cpp \
         planning/algorithms/AStar.cpp \
         planning/algorithms/Dijkstra.cpp \
         planning/algorithms/BFS.cpp \
@@ -34,19 +35,23 @@ case $TARGET in
         planning/algorithms/JPS.cpp \
         planning/algorithms/DStarLite.cpp \
         planning/algorithms/RRT.cpp \
+        rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
+        rl/QTable.cpp rl/RLEnvironment.cpp \
+        planning/CurriculumScheduler.cpp \
         utils/ProbabilityUtils.cpp \
         visualization/Visualizer.cpp \
-        -o pathplanning_classical
-    echo "Build OK → ./pathplanning_classical"
+        -o pathplanning_debug
+    echo "Build OK → ./pathplanning_debug"
     ;;
 
   2)
-    echo "==> Building full binary (all algorithms + tabular RL)..."
+    echo "==> Building full binary (all algorithms + tabular RL + dynamic env)..."
     set -e
     g++ -std=c++17 -Wall -Wextra -O2 \
         main.cpp \
         core/Position.cpp core/Types.cpp \
         environment/Cell.cpp environment/Environment.cpp \
+        environment/DynamicEnvironment.cpp environment/SensorModel.cpp \
         planning/algorithms/AStar.cpp \
         planning/algorithms/Dijkstra.cpp \
         planning/algorithms/BFS.cpp \

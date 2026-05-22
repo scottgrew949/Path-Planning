@@ -92,60 +92,67 @@ vector<Position> BidirectionalAStar::findPath(const Environment& env,
     backwardCost_[goal] = 0.0;
 
 
-    while(!openSetForward.empty() && !openSetBackward.empty())
+    while (!openSetForward.empty() && !openSetBackward.empty())
     {
-        //Forward Movement
-        BidirectionalNode currentForward = openSetForward.top();
-        openSetForward.pop();
-        ++nodesExplored_;
-        forwardFinalized_.insert(currentForward.pos);
-        if (backwardFinalized_.count(currentForward.pos))         // Meeting point check
-            return mergePaths(currentForward.pos, start, goal);
-
-        //Backward Movement
-        BidirectionalNode currentBackward = openSetBackward.top();
-        openSetBackward.pop();
-        ++nodesExplored_;
-        backwardFinalized_.insert(currentBackward.pos);
-        if (forwardFinalized_.count(currentBackward.pos))         // Meeting point check
-            return mergePaths(currentBackward.pos, start, goal);
-
-        // Neighbor Checking forward
-        for (const Position& neighbor : env.getNeighbors(currentForward.pos))
         {
-            if (forwardFinalized_.count(neighbor))
-                continue;  
-            
-             double newCost = forwardCost_[currentForward.pos] + env.moveCost(currentForward.previous, currentForward.pos, neighbor);
-            
+            BidirectionalNode currentForward = openSetForward.top();
+            openSetForward.pop();
 
-            if (forwardCost_.find(neighbor) == forwardCost_.end() || newCost < forwardCost_[neighbor])
+            if (!forwardFinalized_.count(currentForward.pos))
             {
-                forwardCost_[neighbor] = newCost;
-                forwardArrivedFrom_[neighbor] = currentForward.pos;
-                double estimated = newCost + heuristicDistance(neighbor, goal);
-                openSetForward.push({neighbor, currentForward.pos, newCost, estimated});
+                forwardFinalized_.insert(currentForward.pos);
+                ++nodesExplored_;
+
+                if (backwardFinalized_.count(currentForward.pos))
+                    return mergePaths(currentForward.pos, start, goal);
+
+                for (const Position& neighbor : env.getNeighbors(currentForward.pos))
+                {
+                    if (forwardFinalized_.count(neighbor)) continue;
+
+                    double newCost = forwardCost_[currentForward.pos]
+                                   + env.moveCost(currentForward.previous, currentForward.pos, neighbor);
+
+                    if (forwardCost_.find(neighbor) == forwardCost_.end() || newCost < forwardCost_[neighbor])
+                    {
+                        forwardCost_[neighbor] = newCost;
+                        forwardArrivedFrom_[neighbor] = currentForward.pos;
+                        openSetForward.push({neighbor, currentForward.pos, newCost,
+                                             newCost + heuristicDistance(neighbor, goal)});
+                    }
+                }
             }
         }
 
-        // Neighbor Checking backward
-        for (const Position& neighbor : env.getNeighbors(currentBackward.pos))
         {
-            if (backwardFinalized_.count(neighbor))
-                continue;  
-            
-             double newCost = backwardCost_[currentBackward.pos] + env.moveCost(currentBackward.previous, currentBackward.pos, neighbor);
-            
+            BidirectionalNode currentBackward = openSetBackward.top();
+            openSetBackward.pop();
 
-            if (backwardCost_.find(neighbor) == backwardCost_.end() || newCost < backwardCost_[neighbor])
+            if (!backwardFinalized_.count(currentBackward.pos))
             {
-                backwardCost_[neighbor] = newCost;
-                backwardArrivedFrom_[neighbor] = currentBackward.pos;
-                double estimated = newCost + heuristicDistance(neighbor, start);
-                openSetBackward.push({neighbor, currentBackward.pos, newCost, estimated});
+                backwardFinalized_.insert(currentBackward.pos);
+                ++nodesExplored_;
+
+                if (forwardFinalized_.count(currentBackward.pos))
+                    return mergePaths(currentBackward.pos, start, goal);
+
+                for (const Position& neighbor : env.getNeighbors(currentBackward.pos))
+                {
+                    if (backwardFinalized_.count(neighbor)) continue;
+
+                    double newCost = backwardCost_[currentBackward.pos]
+                                   + env.moveCost(currentBackward.previous, currentBackward.pos, neighbor);
+
+                    if (backwardCost_.find(neighbor) == backwardCost_.end() || newCost < backwardCost_[neighbor])
+                    {
+                        backwardCost_[neighbor] = newCost;
+                        backwardArrivedFrom_[neighbor] = currentBackward.pos;
+                        openSetBackward.push({neighbor, currentBackward.pos, newCost,
+                                              newCost + heuristicDistance(neighbor, start)});
+                    }
+                }
             }
         }
-
     }
 
     return {};

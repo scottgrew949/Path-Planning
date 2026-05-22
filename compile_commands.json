@@ -66,6 +66,21 @@
   },
   {
     "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "rl/RLAgent.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c rl/RLAgent.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "rl/DynaQAgent.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c rl/DynaQAgent.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "planning/CurriculumScheduler.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c planning/CurriculumScheduler.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
     "file": "rl/RLEnvironment.cpp",
     "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c rl/RLEnvironment.cpp"
   },
@@ -88,5 +103,15 @@
     "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
     "file": "visualization/Visualizer.cpp",
     "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c visualization/Visualizer.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "environment/DynamicEnvironment.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c environment/DynamicEnvironment.cpp"
+  },
+  {
+    "directory": "/Users/scott/Desktop/C++ review projects/PathPlanning",
+    "file": "environment/SensorModel.cpp",
+    "command": "g++ -std=c++17 -Wall -Wextra -O2 -I. -c environment/SensorModel.cpp"
   }
 ]

@@ -1,7 +1,6 @@
 // planning/algorithms/ThetaStar.cpp
 #include "ThetaStar.h"
 #include <cmath>
-#include <limits>
 
 using namespace std;
 
@@ -52,10 +51,6 @@ bool ThetaStar::hasLineOfSight(const Environment& env,
                                 const Position&    from,
                                 const Position&    to) const
 {
-    // TODO: Bresenham's line algorithm — step from a to b checking each cell
-    //       return false if any cell along the line is an obstacle
-    //       return true if clear
-    // DONE
     int stepX = (from.x < to.x) ? 1 : -1,
         stepY = (from.y < to.y) ? 1 : -1,
         dy = abs(from.y - to.y),
@@ -96,6 +91,9 @@ vector<Position> ThetaStar::findPath(const Environment& env,
     {
         ThetaStarNode current = openSet.top();
         openSet.pop();
+
+        if (finalized_.count(current.pos)) continue;
+        finalized_.insert(current.pos);
         ++nodesExplored_;
 
         if (current.pos == goal)

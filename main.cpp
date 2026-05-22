@@ -6,6 +6,7 @@
 //       main.cpp \
 //       core/Position.cpp core/Types.cpp \
 //       environment/Cell.cpp environment/Environment.cpp \
+//       environment/DynamicEnvironment.cpp environment/SensorModel.cpp \
 //       planning/algorithms/AStar.cpp \
 //       planning/algorithms/Dijkstra.cpp \
 //       planning/algorithms/BFS.cpp \
@@ -16,6 +17,7 @@
 //       planning/algorithms/RRT.cpp \
 //       rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
 //       rl/QTable.cpp rl/RLEnvironment.cpp \
+//       planning/CurriculumScheduler.cpp \
 //       utils/ProbabilityUtils.cpp \
 //       visualization/Visualizer.cpp \
 //       -o pathplanning
@@ -45,6 +47,8 @@
 #include "rl/QLearningAgent.h"
 #include "rl/DynaQAgent.h"
 #include "planning/CurriculumScheduler.h"
+#include "environment/DynamicEnvironment.h"
+#include "environment/SensorModel.h"
 
 using namespace std;
 
@@ -116,7 +120,7 @@ int main()
     algos.push_back(make_unique<RRT>());
 
     vector<PathResult> results;
-    for (auto& algo : algos)
+    for (unique_ptr<IPathfinder>& algo : algos)
     {
         env.reset();
         PathResult r = runTimed(*algo, env, env.getStart(), env.getGoal());
@@ -144,7 +148,7 @@ int main()
 
     // demonstrate expectedValue with path costs:
     vector<double> costs;
-    for (const auto& res : results) costs.push_back(res.pathCost);
+    for (const PathResult& res : results) costs.push_back(res.pathCost);
     vector<double> probs(costs.size(), 1.0 / costs.size());
     double ev = ProbabilityUtils::expectedValue(costs, probs);
     cout << "Expected path cost: " << ev << '\n';
@@ -203,7 +207,7 @@ int main()
         for (int ep = 1; ep <= numEpisodes; ++ep)
         {
             if (sched.isStageTransition(ep - 1)) {
-                const auto& stage = sched.getStageForEpisode(ep - 1);
+                const CurriculumScheduler::Stage& stage = sched.getStageForEpisode(ep - 1);
                 env.generateLabyrinth(stage.loopDensity, static_cast<unsigned>(stage.stageIndex + 1) * 37u);
                 rlEnv.reset();
             }
@@ -272,7 +276,7 @@ int main()
         for (int ep = 1; ep <= numEpisodes; ++ep)
         {
             if (sched.isStageTransition(ep - 1)) {
-                const auto& stage = sched.getStageForEpisode(ep - 1);
+                const CurriculumScheduler::Stage& stage = sched.getStageForEpisode(ep - 1);
                 env.generateLabyrinth(stage.loopDensity, static_cast<unsigned>(stage.stageIndex + 1) * 37u);
                 rlEnv.reset();
             }
@@ -324,6 +328,111 @@ int main()
     // =========================================================================
     Visualizer::printSection("Full System Comparison");
     Visualizer::displayFinalSummary(results, rlSummary);
+
+    // =========================================================================
+    // Section 7: Dynamic obstacles + partial observability (Phase 8)
+    // =========================================================================
+    Visualizer::printSection("Dynamic Obstacles + Partial Observability");
+
+    // 21-wide x 11-tall grid — small enough for readable terminal output.
+    DynamicEnvironment dynamicEnv(21, 11);
+    dynamicEnv.setStart(Position(0,  0));
+    dynamicEnv.setGoal( Position(20, 10));
+
+    // Static L-shaped wall that forces the path through a constrained corridor.
+    for (int y = 2; y <= 6; ++y)   dynamicEnv.setObstacle(Position(7, y));
+    for (int x = 8; x <= 14; ++x)  dynamicEnv.setObstacle(Position(x, 6));
+
+    // Dynamic obstacle 1 — horizontal patrol along row y=8 (below the static wall), columns 2..17.
+    // Moves every 2 ticks (slower obstacle — like a slow-moving vehicle).
+    // Row y=8 is chosen to avoid the static wall at x=7,y=2..6 and x=8..14,y=6.
+    std::vector<Position> horizontalPatrol;
+    for (int x =  2; x <= 17; ++x) horizontalPatrol.push_back(Position(x, 8));
+    for (int x = 16; x >=  3; --x) horizontalPatrol.push_back(Position(x, 8));
+    dynamicEnv.addDynamicObstacle(horizontalPatrol, 2);
+
+    // Dynamic obstacle 2 — vertical patrol along column x=16, rows 1..8.
+    // Moves every tick (faster obstacle — like a pedestrian).
+    std::vector<Position> verticalPatrol;
+    for (int y = 1; y <= 8; ++y) verticalPatrol.push_back(Position(16, y));
+    for (int y = 7; y >= 2; --y) verticalPatrol.push_back(Position(16, y));
+    dynamicEnv.addDynamicObstacle(verticalPatrol, 1);
+
+    cout << "Environment: 21x11  Start: (0,0)  Goal: (20,10)\n";
+    cout << "Dynamic obstacles: " << dynamicEnv.getDynamicObstacleCount() << "\n";
+    cout << "  Obstacle 1 — horizontal patrol y=8, x=2..17, 1 step per 2 ticks\n";
+    cout << "  Obstacle 2 — vertical patrol   x=16, y=1..8, 1 step per tick\n\n";
+
+    // D* Lite for replanning.
+    // Note: DStarLite::updateObstacle() is not yet implemented (stub) —
+    // each replan calls findPath() from scratch. This is functionally correct;
+    // true incremental replanning is a future optimisation.
+    DStarLite dstarPhase8;
+
+    // Initial plan — obstacles at their starting positions.
+    std::vector<Position> dynamicPath = dstarPhase8.findPath(dynamicEnv,
+                                                              dynamicEnv.getStart(),
+                                                              dynamicEnv.getGoal());
+    cout << "--- Tick 0 (initial) ---\n";
+    Visualizer::displayPath(dynamicEnv, dynamicPath, "D* Lite");
+    if (dynamicPath.empty())
+        cout << "  [no path found]\n";
+    else
+        cout << "  Path length: " << dynamicPath.size() << " steps\n\n";
+
+    // Simulate ticks and replan after each batch.
+    const int ticksPerSnapshot = 5;
+    const int totalTicks       = 15;
+
+    for (int tick = 1; tick <= totalTicks; ++tick)
+    {
+        dynamicEnv.tick();
+
+        if (tick % ticksPerSnapshot == 0)
+        {
+            dynamicEnv.reset();  // clear PATH/VISITED overlays only
+            dynamicPath = dstarPhase8.findPath(dynamicEnv,
+                                               dynamicEnv.getStart(),
+                                               dynamicEnv.getGoal());
+            cout << "--- Tick " << tick << " ---\n";
+            Visualizer::displayPath(dynamicEnv, dynamicPath, "D* Lite");
+            if (dynamicPath.empty())
+                cout << "  [no path — obstacles blocked all routes]\n\n";
+            else
+                cout << "  Path length: " << dynamicPath.size() << " steps\n\n";
+        }
+    }
+
+    // Partial observability — SensorModel at the agent's start position.
+    // Range 5, no noise (perfect sensor within range).
+    SensorModel sensor(5, 0.0, 0.0);
+    std::vector<SensorModel::Observation> sensorReadings =
+        sensor.observe(dynamicEnv.getStart(), dynamicEnv);
+
+    int obstaclesDetected = 0;
+    for (const SensorModel::Observation& reading : sensorReadings)
+        if (reading.reportedAsObstacle) ++obstaclesDetected;
+
+    cout << "Sensor observation from start (0,0):\n";
+    cout << "  Range:              " << sensor.getSensorRange() << " (Manhattan)\n";
+    cout << "  Cells scanned:      " << sensorReadings.size()  << "\n";
+    cout << "  Obstacles detected: " << obstaclesDetected       << "\n";
+    cout << "  Cells clear:        " << sensorReadings.size() - obstaclesDetected << "\n";
+    cout << "  (cells beyond range are unknown — planner uses prior beliefs)\n\n";
+
+    // Noisy sensor demo — 10% false positive, 5% false negative.
+    SensorModel noisySensor(5, 0.1, 0.05);
+    std::vector<SensorModel::Observation> noisyReadings =
+        noisySensor.observe(dynamicEnv.getStart(), dynamicEnv);
+
+    int noisyObstacles = 0;
+    for (const SensorModel::Observation& reading : noisyReadings)
+        if (reading.reportedAsObstacle) ++noisyObstacles;
+
+    cout << "Noisy sensor (FP=10%, FN=5%) from start (0,0):\n";
+    cout << "  Obstacles reported: " << noisyObstacles << "\n";
+    cout << "  (perfect sensor reported " << obstaclesDetected
+         << " — difference is sensor noise)\n";
 
     return 0;
 }

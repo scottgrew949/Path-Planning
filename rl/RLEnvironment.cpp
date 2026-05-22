@@ -31,24 +31,12 @@ StepResult RLEnvironment::step(Action action)
     if(env_.inBounds(candidatePosition) && !env_.isObstacle(candidatePosition))
     {
         currentPosition_ = candidatePosition;
-        if (currentPosition_ == env_.getGoal())  
+        if (currentPosition_ == env_.getGoal())
             return { currentPosition_, REWARD_GOAL, true  };
-            // Implicltly used StepResult conmstructor via the compiler since it is the return type
         return { currentPosition_, REWARD_STEP, false };
     }
-    
-    return { currentPosition_, REWARD_WALL, false };
 
-    //   Case A — valid move:
-    //     TODO: update currentPosition_ = candidatePosition
-    //     TODO: check if currentPosition_ == env_.getGoal()
-    //       If yes:  return { currentPosition_, REWARD_GOAL, true  }
-    //       If no:   return { currentPosition_, REWARD_STEP, false }
-    //
-    //   Case B — wall or out of bounds:
-    //     TODO: do NOT update currentPosition_ — agent stays put
-    //     TODO: return { currentPosition_, REWARD_WALL, false }
-    //
+    return { currentPosition_, REWARD_WALL, false };
     // CONCEPT — Why stay put on a wall hit?
     //   In a real robot, colliding with a wall is not "teleporting back to start."
     //   The robot stays where it is but loses time and energy.

@@ -67,15 +67,20 @@ Position JPS::jump(const Environment& env,
     if (next == goal)
         return next;
 
-    // Check for junction (forced perpendicular neighbor)
+    // Forced neighbor: perpendicular cell at current is blocked AND at next is open.
+    // Without both conditions, nearly every open cell becomes a jump point.
     if (direction.x != 0)
     {
-        if (env.isValid(Position(next.x, next.y + 1)) || env.isValid(Position(next.x, next.y - 1)))
+        bool forcedAbove = !env.isValid(Position(current.x, next.y + 1)) && env.isValid(Position(next.x, next.y + 1));
+        bool forcedBelow = !env.isValid(Position(current.x, next.y - 1)) && env.isValid(Position(next.x, next.y - 1));
+        if (forcedAbove || forcedBelow)
             return next;
     }
     else
     {
-        if (env.isValid(Position(next.x + 1, next.y)) || env.isValid(Position(next.x - 1, next.y)))
+        bool forcedRight = !env.isValid(Position(next.x + 1, current.y)) && env.isValid(Position(next.x + 1, next.y));
+        bool forcedLeft  = !env.isValid(Position(next.x - 1, current.y)) && env.isValid(Position(next.x - 1, next.y));
+        if (forcedRight || forcedLeft)
             return next;
     }
 
