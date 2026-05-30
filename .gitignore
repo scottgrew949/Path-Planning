@@ -1,13 +1,25 @@
 venv/
 .cache/
+build/
+__pycache__/
+
+# compiled binaries
 pathplanning
 pathplanning_classical
 *.o
 *.so
-*.csv
-*.png
-build/
-__pycache__/
 *.pyc
 *.pth
+
+# generated data and model weights — too large for git, regenerate with build.sh
+python/data/
+*.npy
+*.bin
+
+# output artifacts
+*.csv
+*.png
+
+# misc
+TEXTBOOK.txt
 .claude/

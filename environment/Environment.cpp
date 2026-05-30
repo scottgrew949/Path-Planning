@@ -155,10 +155,15 @@ void Environment::generateLabyrinth(double loopDensity, unsigned seed)
 // Status: UNUSED
 void Environment::generateRandom(double obstacleDensity)
 {
+    generateRandom(obstacleDensity, random_device{}());
+}
+
+void Environment::generateRandom(double obstacleDensity, unsigned seed)
+{
     if (obstacleDensity < 0.0 || obstacleDensity > 1.0)
         throw invalid_argument("obstacleDensity must be in [0.0, 1.0]");
 
-    mt19937 gen(random_device{}());
+    mt19937 gen(seed);
     uniform_real_distribution<double> dist(0.0, 1.0);
 
     for (int x = 0; x < width_; x++)

@@ -32,35 +32,29 @@ class ReplayBuffer:
     def __init__(self, capacity: int):
         self.capacity = capacity
         self.buffer = deque(maxlen=capacity)
-        pass
 
     def push(self, state, action: int, reward: float, next_state, done: bool):
         self.buffer.append((state, action, reward, next_state, done))
-        pass
 
     def sample(self, batch_size: int):
-        batch = random.sample(self.buffer, batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
-        #
-        actions_tensor     = torch.LongTensor(actions)
-        rewards_tensor     = torch.FloatTensor(rewards)
-        dones_tensor       = torch.FloatTensor(dones)
-        states_tensor      = torch.cat(states)
-        next_states_tensor = torch.cat(next_states)
-        return states_tensor, actions_tensor, rewards_tensor, next_states_tensor, dones_tensor
-        
         # CONCEPT — Why FloatTensor vs LongTensor?
         #   Neural net inputs and rewards are floats — continuous values.
         #   Actions are indices (0-3) — integers used to index into Q-value output.
         #   PyTorch requires the correct dtype for each operation.
-        pass
+        batch = random.sample(self.buffer, batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+        return (
+            torch.cat(states),
+            torch.LongTensor(actions),
+            torch.FloatTensor(rewards),
+            torch.cat(next_states),
+            torch.FloatTensor(dones),
+        )
 
     def __len__(self) -> int:
         return len(self.buffer)
-        pass
 
     def is_ready(self, batch_size: int) -> bool:
+        # Training should not start until the buffer has enough samples
+        # to fill at least one batch — otherwise sample() would fail.
         return len(self) >= batch_size
-        #       Training should not start until the buffer has enough samples
-        #       to fill at least one batch — otherwise sample() would fail.
-        pass

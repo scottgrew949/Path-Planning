@@ -29,6 +29,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <string>
 
 #include "../core/Position.h"
 #include "../core/Types.h"
@@ -41,6 +42,17 @@
 
 namespace py = pybind11;
 
+// Shared helper — converts a vector<Position> to vector<vector<int>> for Python.
+// Used by every findPath / tick / getDynamicObstaclePositions method.
+static std::vector<std::vector<int>> convertPositions(const std::vector<Position>& positions)
+{
+    std::vector<std::vector<int>> result;
+    result.reserve(positions.size());
+    for (const Position& position : positions)
+        result.push_back({ position.x, position.y });
+    return result;
+}
+
 // ---- GridEnvironment --------------------------------------------------------
 // Owns both Environment and RLEnvironment so Python manages one object.
 // Exposes the full gym-style interface Python needs for DQN training.
@@ -48,20 +60,24 @@ namespace py = pybind11;
 class GridEnvironment
 {
 public:
-    GridEnvironment(int      width,
-                    int      height,
-                    int      startX,
-                    int      startY,
-                    int      goalX,
-                    int      goalY,
-                    double   labyrinthDensity,
-                    unsigned seed = 0)
+    GridEnvironment(int         width,
+                    int         height,
+                    int         startX,
+                    int         startY,
+                    int         goalX,
+                    int         goalY,
+                    double      density,
+                    unsigned    seed     = 0,
+                    std::string mazeType = "labyrinth")
         : environment_(width, height),
           rlEnvironment_(environment_)
     {
         environment_.setStart(Position(startX, startY));
         environment_.setGoal(Position(goalX, goalY));
-        environment_.generateLabyrinth(labyrinthDensity, seed);
+        if (mazeType == "random")
+            environment_.generateRandom(density, seed);
+        else
+            environment_.generateLabyrinth(density, seed);
     }
 
     // Gym interface — forwarded to RLEnvironment
@@ -152,6 +168,19 @@ public:
         return result;
     }
 
+    // Runs A* between any two cells. Stores node count for getNodesExplored().
+    // Used by the benchmark to get real node counts instead of approximations.
+    std::vector<std::vector<int>> findPath(int startX, int startY, int goalX, int goalY)
+    {
+        AStar astar;
+        std::vector<Position> path = astar.findPath(
+            environment_, Position(startX, startY), Position(goalX, goalY));
+        nodesExplored_ = astar.getNodesExplored();
+        return convertPositions(path);
+    }
+
+    int getNodesExplored() const { return nodesExplored_; }
+
     // Returns true if cell (x,y) contains an obstacle.
     bool isObstacle(int x, int y) const
     {
@@ -189,17 +218,13 @@ public:
             environment_,
             Position(startX, startY),
             Position(goalX,  goalY));
-
-        std::vector<std::vector<int>> result;
-        result.reserve(path.size());
-        for (const Position& position : path)
-            result.push_back({ position.x, position.y });
-        return result;
+        return convertPositions(path);
     }
 
 private:
-    Environment    environment_;   // owned — lives as long as this object
-    RLEnvironment  rlEnvironment_; // holds reference to environment_ above
+    Environment    environment_;
+    RLEnvironment  rlEnvironment_;
+    int            nodesExplored_ = 0;
 };
 
 // ---- DynamicGridEnvironment -------------------------------------------------
@@ -241,12 +266,7 @@ public:
     // Advance simulation one tick. Returns [[x,y], ...] of all changed cells.
     std::vector<std::vector<int>> tick()
     {
-        std::vector<Position> changed = environment_.tick();
-        std::vector<std::vector<int>> result;
-        result.reserve(changed.size());
-        for (const Position& position : changed)
-            result.push_back({ position.x, position.y });
-        return result;
+        return convertPositions(environment_.tick());
     }
 
     // Returns 2D grid of ints: 1 = obstacle, 0 = free.
@@ -263,48 +283,31 @@ public:
         return grid;
     }
 
-    // Runs A* from (startX,startY) to (goalX,goalY) through current obstacle state.
-    // Returns [[x,y], ...] path. Empty list if no path exists.
-    std::vector<std::vector<int>> findPath(int startX, int startY, int goalX, int goalY) const
+    // Runs A* and returns path. Stores nodes explored for getNodesExploredLastReplan().
+    std::vector<std::vector<int>> findPath(int startX, int startY, int goalX, int goalY)
     {
         AStar astar;
         std::vector<Position> path = astar.findPath(
             environment_, Position(startX, startY), Position(goalX, goalY));
-        std::vector<std::vector<int>> result;
-        result.reserve(path.size());
-        for (const Position& position : path)
-            result.push_back({ position.x, position.y });
-        return result;
+        nodesExploredLastReplan_ = astar.getNodesExplored();
+        return convertPositions(path);
     }
 
-    // Place or remove a static obstacle. Used by Python to build the grid layout.
     void setObstacle  (int x, int y) { environment_.setObstacle  (Position(x, y)); }
     void clearObstacle(int x, int y) { environment_.clearObstacle(Position(x, y)); }
 
-    // Returns [[x,y], ...] of each dynamic obstacle's current position.
     std::vector<std::vector<int>> getDynamicObstaclePositions() const
     {
-        std::vector<Position> positions = environment_.getCurrentObstaclePositions();
-        std::vector<std::vector<int>> result;
-        result.reserve(positions.size());
-        for (const Position& position : positions)
-            result.push_back({ position.x, position.y });
-        return result;
+        return convertPositions(environment_.getCurrentObstaclePositions());
     }
 
-    // D* Lite variant — incremental replanner designed for dynamic environments.
-    // Same interface as findPath but tracks nodes explored for stats comparison.
     std::vector<std::vector<int>> findPathDStar(int startX, int startY, int goalX, int goalY)
     {
         DStarLite dstar;
         std::vector<Position> path = dstar.findPath(
             environment_, Position(startX, startY), Position(goalX, goalY));
         nodesExploredLastReplan_ = dstar.getNodesExplored();
-        std::vector<std::vector<int>> result;
-        result.reserve(path.size());
-        for (const Position& position : path)
-            result.push_back({ position.x, position.y });
-        return result;
+        return convertPositions(path);
     }
 
     int getNodesExploredLastReplan() const { return nodesExploredLastReplan_; }
@@ -332,15 +335,16 @@ PYBIND11_MODULE(pathplanning, module)
     module.doc() = "C++ path planning and RL environment bridge";
 
     py::class_<GridEnvironment>(module, "GridEnvironment")
-        .def(py::init<int, int, int, int, int, int, double, unsigned>(),
+        .def(py::init<int, int, int, int, int, int, double, unsigned, std::string>(),
              py::arg("width"),
              py::arg("height"),
              py::arg("startX"),
              py::arg("startY"),
              py::arg("goalX"),
              py::arg("goalY"),
-             py::arg("labyrinthDensity"),
-             py::arg("seed") = 0)
+             py::arg("density"),
+             py::arg("seed")     = 0,
+             py::arg("mazeType") = "labyrinth")
         .def("reset",           &GridEnvironment::reset)
         .def("step",            &GridEnvironment::step)
         .def("getWidth",        &GridEnvironment::getWidth)
@@ -349,6 +353,8 @@ PYBIND11_MODULE(pathplanning, module)
         .def("getLineOfSight",  &GridEnvironment::getLineOfSight)
         .def("getExpertAction",    &GridEnvironment::getExpertAction)
         .def("getExpertTrajectory",&GridEnvironment::getExpertTrajectory)
+        .def("findPath",           &GridEnvironment::findPath)
+        .def("getNodesExplored",   &GridEnvironment::getNodesExplored)
         .def("isObstacle",         &GridEnvironment::isObstacle)
         .def("isValid",            &GridEnvironment::isValid)
 
