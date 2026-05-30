@@ -67,3 +67,12 @@ int DynamicEnvironment::getTickCount() const
 {
     return tickCount_;
 }
+
+std::vector<Position> DynamicEnvironment::getCurrentObstaclePositions() const
+{
+    std::vector<Position> positions;
+    positions.reserve(dynamicObstacles_.size());
+    for (const DynamicObstacle& obstacle : dynamicObstacles_)
+        positions.push_back(obstacle.trajectory[obstacle.currentIndex]);
+    return positions;
+}

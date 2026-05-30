@@ -17,12 +17,16 @@ cpp_sources = [
     "core/Types.cpp",
     "environment/Cell.cpp",
     "environment/Environment.cpp",
+    "environment/DynamicEnvironment.cpp",
     "planning/algorithms/AStar.cpp",
+    "planning/algorithms/DStarLite.cpp",
     "rl/RLAgent.cpp",
     "rl/RLEnvironment.cpp",
     "rl/QTable.cpp",
     "rl/QLearningAgent.cpp",
     "utils/ProbabilityUtils.cpp",
+    "planning/hybrid/HeuristicNetwork.cpp",
+    "planning/hybrid/NeuralAStar.cpp",
 ]
 
 extension = Extension(

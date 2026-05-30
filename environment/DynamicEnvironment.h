@@ -43,6 +43,10 @@ public:
     int getDynamicObstacleCount() const;
     int getTickCount()            const;
 
+    // Returns the current grid position of each registered dynamic obstacle.
+    // Index in the returned vector matches the order obstacles were added.
+    std::vector<Position> getCurrentObstaclePositions() const;
+
 private:
     struct DynamicObstacle
     {
