@@ -234,15 +234,15 @@ PHASE 8 — Dynamic Obstacles + Partial Observability
   [x] RL local policy          — handle dynamic agents classical planner cannot predict
 
 PHASE 9 — Neural A* (Hybrid Classical-RL)
-  [ ] Learned heuristic        — neural net replaces Manhattan distance
-  [ ] Train on maze dataset
-  [ ] Benchmark vs standard A*
+  [x] Learned heuristic        — neural net replaces Manhattan distance
+  [x] Train on maze dataset
+  [x] Benchmark vs standard A*
 
 PHASE 10 — Attention-Based Policy (Research Level)
-  [ ] Grid encoder             — CNN or patch embedding
-  [ ] Transformer policy       — self-attention over grid state
-  [ ] Decision Transformer     — RL as sequence prediction, no Bellman required
-  [ ] Diffuser                 — diffusion model generates full trajectories
+  [x] Grid encoder             — CNN or patch embedding
+  [x] Transformer policy       — self-attention over grid state
+  [x] Decision Transformer     — RL as sequence prediction, no Bellman required
+  [x] Diffuser                 — diffusion model generates full trajectories
 
 ================================================================================
 MVP FINISHED

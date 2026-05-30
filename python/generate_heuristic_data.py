@@ -39,7 +39,7 @@ import numpy as np
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'build'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pathplanning  # pybind11 module — provides Environment, Position
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), 'data', 'heuristic_training.npy')
@@ -60,9 +60,12 @@ def get_grid_neighbors(env, x: int, y: int) -> list:
     Implement: return [(nx, ny), ...] for the 4 cardinal directions,
     filtering to in-bounds, non-obstacle cells.
     """
-    # TODO: call env.isValid(pathplanning.Position(nx, ny)) for each of the 4 directions
-    # Return list of (nx, ny) tuples that pass the validity check
-    raise NotImplementedError("implement neighbor enumeration")
+    neighbors = []
+    for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+        nx, ny = x + dx, y + dy
+        if env.isValid(nx, ny):
+            neighbors.append((nx, ny))
+    return neighbors
 
 
 def backward_dijkstra(env, goal_x: int, goal_y: int) -> dict:
@@ -92,10 +95,17 @@ def backward_dijkstra(env, goal_x: int, goal_y: int) -> dict:
        d. For each neighbor (nx, ny): push (cost + 1, nx, ny)
     4. Return dist — maps (x,y) → true h* to goal
     """
-    # TODO: implement min-heap Dijkstra from goal backward through the maze
-    # Use get_grid_neighbors() for adjacency
-    # Move cost is 1.0 for all edges (cardinal movement, no turn penalty in training data)
-    raise NotImplementedError("implement backward Dijkstra")
+    dist = {}
+    heap = [(0, goal_x, goal_y)]
+    while heap:
+        cost, x, y = heapq.heappop(heap)
+        if (x, y) in dist:
+            continue
+        dist[(x, y)] = cost
+        for nx, ny in get_grid_neighbors(env, x, y):
+            if (nx, ny) not in dist:
+                heapq.heappush(heap, (cost + 1, nx, ny))
+    return dist
 
 
 def generate_samples_for_maze(env, width: int, height: int) -> np.ndarray:
@@ -120,9 +130,27 @@ def generate_samples_for_maze(env, width: int, height: int) -> np.ndarray:
     3. For each (x,y) in dist: build one row [x/W, y/H, gx/W, gy/H, h*/max_h]
     4. Return np.array of shape (num_reachable_cells, 5)
     """
-    # TODO: build and return the sample array for one maze
-    # Normalise all coordinates by width/height, normalise h* by (width + height - 2)
-    raise NotImplementedError("implement sample generation for one maze")
+    max_h   = float(width + height - 2)
+
+    for _ in range(200):
+        goal_x = np.random.randint(1, width  - 1)
+        goal_y = np.random.randint(1, height - 1)
+        if env.isValid(goal_x, goal_y):
+            break
+    else:
+        goal_x, goal_y = width // 2, height // 2
+
+    dist = backward_dijkstra(env, goal_x, goal_y)
+    if not dist:
+        return np.empty((0, 5), dtype=np.float32)
+
+    rows = []
+    gx_norm = goal_x / width
+    gy_norm = goal_y / height
+    for (x, y), h_star in dist.items():
+        rows.append([x / width, y / height, gx_norm, gy_norm, h_star / max_h])
+
+    return np.array(rows, dtype=np.float32)
 
 
 def main():
@@ -143,9 +171,26 @@ def main():
     6. Save to OUTPUT_PATH with np.save()
     7. Print: total samples, feature min/max (sanity check normalisation)
     """
-    # TODO: implement the full data generation loop
-    # Print progress every 50 mazes so the user can monitor
-    raise NotImplementedError("implement main data generation loop")
+    all_samples = []
+
+    for seed in range(NUM_MAZES):
+        env     = pathplanning.GridEnvironment(GRID_WIDTH, GRID_HEIGHT, 1, 1,
+                                               GRID_WIDTH - 2, GRID_HEIGHT - 2,
+                                               OBSTACLE_DENSITY, seed)
+        samples = generate_samples_for_maze(env, GRID_WIDTH, GRID_HEIGHT)
+        if samples.shape[0] > 0:
+            all_samples.append(samples)
+
+        if (seed + 1) % 50 == 0:
+            print(f"Processed {seed + 1}/{NUM_MAZES} mazes")
+
+    dataset = np.vstack(all_samples)
+    np.random.shuffle(dataset)
+    np.save(OUTPUT_PATH, dataset)
+
+    print(f"Saved {len(dataset):,} samples to {OUTPUT_PATH}")
+    print(f"Feature min: {dataset.min(axis=0)}")
+    print(f"Feature max: {dataset.max(axis=0)}")
 
 
 if __name__ == '__main__':

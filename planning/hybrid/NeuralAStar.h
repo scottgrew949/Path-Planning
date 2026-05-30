@@ -114,10 +114,19 @@ public:
     // Expose ε so main.cpp can print it in the benchmark table.
     double getEpsilon() const;
 
+    // CONCEPT — Heuristic call count vs nodes explored:
+    // Nodes explored = number of times we POPPED from the open set.
+    // Heuristic calls = number of times we PUSHED (estimated each neighbour).
+    // In standard A*, heuristic calls ≈ 4 × nodes explored (4 neighbours each).
+    // A tighter heuristic means fewer pushes → fewer heuristic calls too.
+    // Exposing this counter lets the benchmark report how much work the network saved.
+    int    getHeuristicCallCount() const;
+
 private:
     HeuristicNetwork network_;
     double           weightEpsilon_;
-    int              nodesExplored_ = 0;
+    int              nodesExplored_      = 0;
+    mutable int      heuristicCallCount_ = 0;  // mutable: incremented from const heuristicDistance()
 
     std::unordered_map<Position, double,   PositionHash> costFromStart_;
     std::unordered_map<Position, Position, PositionHash> arrivedFrom_;

@@ -17,8 +17,7 @@ bool NeuralNodeComparator::operator()(
     // Returning (a > b) flips it to a MIN-heap — lowest f-cost node is popped first.
     // This is correct for A*: we always want to expand the most promising node.
 
-    // TODO: return firstNode.totalEstimatedCost > secondNode.totalEstimatedCost
-    return false;
+    return firstNode.totalEstimatedCost > secondNode.totalEstimatedCost;
 }
 
 // ---- NeuralAStar ------------------------------------------------------------
@@ -32,9 +31,7 @@ NeuralAStar::NeuralAStar(const std::string& weightsFilePath, double weightEpsilo
 
 string NeuralAStar::getName() const
 {
-    // TODO: return a name that includes ε, e.g. "Neural A* (ε=1.5)"
-    // Use std::to_string(weightEpsilon_) for the value.
-    return "Neural A*";
+    return "Neural A* (e=" + std::to_string(weightEpsilon_) + ")";
 }
 
 AlgorithmType NeuralAStar::getType() const
@@ -52,10 +49,18 @@ double NeuralAStar::getEpsilon() const
     return weightEpsilon_;
 }
 
+int NeuralAStar::getHeuristicCallCount() const
+{
+    return heuristicCallCount_;
+}
+
 void NeuralAStar::clearState()
 {
-    // TODO: call .clear() on costFromStart_, arrivedFrom_, finalized_
-    // Same pattern as AStar::clearState()
+    costFromStart_.clear();
+    arrivedFrom_.clear();
+    finalized_.clear();
+    nodesExplored_      = 0;
+    heuristicCallCount_ = 0;
 }
 
 double NeuralAStar::costFromStartTo(const Position& position) const
@@ -66,8 +71,9 @@ double NeuralAStar::costFromStartTo(const Position& position) const
     // when the position is not yet in the map.
     // This avoids storing +inf for every cell upfront (wastes memory).
 
-    // TODO: look up position in costFromStart_
-    // If found: return its value. If not: return numeric_limits<double>::infinity()
+    auto iterator = costFromStart_.find(position);
+    if (iterator != costFromStart_.end())
+        return iterator->second;
     return numeric_limits<double>::infinity();
 }
 
@@ -78,6 +84,9 @@ double NeuralAStar::heuristicDistance(
     int             gridHeight
 ) const
 {
+    // Mechanical counter — scaffolding, not algorithm logic.
+    ++heuristicCallCount_;
+
     // CONCEPT — Heuristic dispatch with graceful degradation:
     // If the network loaded successfully, use the learned heuristic.
     // If not (file missing, corrupt, wrong format), fall back to Manhattan.
@@ -89,14 +98,19 @@ double NeuralAStar::heuristicDistance(
     // Encapsulating ε in heuristicDistance() means findPath() looks identical
     // to standard A* — only the heuristic call differs. Easier to read and verify.
 
-    // TODO implement:
-    // if (network_.isLoaded()):
-    //     double rawPrediction = network_.predict(currentX, currentY, goalX, goalY, width, height)
-    //     return weightEpsilon_ * rawPrediction
-    // else:
-    //     double manhattan = abs(dx) + abs(dy)
-    //     return weightEpsilon_ * manhattan
-    return 0.0;
+    if (network_.isLoaded())
+    {
+        double rawPrediction = network_.predict(
+            currentPosition.x, currentPosition.y,
+            goalPosition.x,    goalPosition.y,
+            gridWidth,         gridHeight
+        );
+        return weightEpsilon_ * rawPrediction;
+    }
+
+    double manhattan = abs(currentPosition.x - goalPosition.x)
+                     + abs(currentPosition.y - goalPosition.y);
+    return weightEpsilon_ * manhattan;
 }
 
 vector<Position> NeuralAStar::findPath(
@@ -117,27 +131,47 @@ vector<Position> NeuralAStar::findPath(
     // The suboptimality guarantee: cost(found path) ≤ ε * cost(optimal path).
     // We verify this claim empirically in the benchmark.
 
-    // TODO implement — identical structure to AStar::findPath():
-    // 1. clearState()
-    // 2. Initialize priority_queue<NeuralAStarNode, vector<...>, NeuralNodeComparator>
-    // 3. costFromStart_[startPosition] = 0.0
-    // 4. Push {startPosition, startPosition, 0.0, heuristicDistance(start, goal, w, h)}
-    // 5. nodesExplored_ = 0
-    // 6. While openSet not empty:
-    //      NeuralAStarNode current = openSet.top(); openSet.pop()
-    //      if finalized_.count(current.pos): continue
-    //      finalized_.insert(current.pos)
-    //      ++nodesExplored_
-    //      if current.pos == goalPosition: return reconstructPath(goal, start, arrivedFrom_)
-    //      for each neighbour in environment.getNeighbors(current.pos):
-    //          double newCost = costFromStartTo(current.pos)
-    //                         + environment.moveCost(current.previous, current.pos, neighbour)
-    //          if newCost < costFromStartTo(neighbour):
-    //              arrivedFrom_[neighbour]   = current.pos
-    //              costFromStart_[neighbour] = newCost
-    //              double h = heuristicDistance(neighbour, goalPosition,
-    //                                           environment.getWidth(), environment.getHeight())
-    //              openSet.push({neighbour, current.pos, newCost, newCost + h})
-    // 7. Return {} (no path found)
+    clearState();
+
+    priority_queue<NeuralAStarNode, vector<NeuralAStarNode>, NeuralNodeComparator> openSet;
+
+    costFromStart_[startPosition] = 0.0;
+    openSet.push({
+        startPosition,
+        startPosition,
+        0.0,
+        heuristicDistance(startPosition, goalPosition, environment.getWidth(), environment.getHeight())
+    });
+
+    while (!openSet.empty())
+    {
+        NeuralAStarNode current = openSet.top();
+        openSet.pop();
+
+        if (finalized_.count(current.pos)) continue;
+        finalized_.insert(current.pos);
+        ++nodesExplored_;
+
+        if (current.pos == goalPosition)
+            return reconstructPath(goalPosition, startPosition, arrivedFrom_);
+
+        for (const Position& neighbour : environment.getNeighbors(current.pos))
+        {
+            double newCost = costFromStartTo(current.pos)
+                           + environment.moveCost(current.previous, current.pos, neighbour);
+
+            if (newCost < costFromStartTo(neighbour))
+            {
+                arrivedFrom_[neighbour]   = current.pos;
+                costFromStart_[neighbour] = newCost;
+                double heuristic = heuristicDistance(
+                    neighbour, goalPosition,
+                    environment.getWidth(), environment.getHeight()
+                );
+                openSet.push({neighbour, current.pos, newCost, newCost + heuristic});
+            }
+        }
+    }
+
     return {};
 }

@@ -59,7 +59,8 @@ import os
 from heuristic_net import HeuristicNetwork, export_weights
 
 DATA_PATH    = os.path.join(os.path.dirname(__file__), 'data', 'heuristic_training.npy')
-WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), 'data', 'weights.bin')
+WEIGHTS_PATH    = os.path.join(os.path.dirname(__file__), 'data', 'weights.bin')
+WEIGHTS_PT_PATH = os.path.join(os.path.dirname(__file__), 'data', 'weights.pt')
 
 BATCH_SIZE   = 256
 NUM_EPOCHS   = 60
@@ -80,8 +81,10 @@ def load_dataset(data_path: str) -> tuple:
     3. Convert to float32 tensors with torch.tensor(..., dtype=torch.float32)
     4. Return (inputs_tensor, labels_tensor)
     """
-    # TODO: load data, split into features and labels, convert to tensors
-    raise NotImplementedError("implement dataset loading")
+    data   = np.load(data_path)
+    inputs = torch.tensor(data[:, :4], dtype=torch.float32)
+    labels = torch.tensor(data[:, 4:], dtype=torch.float32)
+    return (inputs, labels)
 
 
 def build_dataloaders(inputs: torch.Tensor, labels: torch.Tensor) -> tuple:
@@ -98,8 +101,13 @@ def build_dataloaders(inputs: torch.Tensor, labels: torch.Tensor) -> tuple:
     3. Return DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
             and DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False)
     """
-    # TODO: create TensorDataset, split train/val, wrap in DataLoaders
-    raise NotImplementedError("implement dataloader construction")
+    dataset    = TensorDataset(inputs, labels)
+    val_size   = int(len(dataset) * VAL_FRACTION)
+    train_size = len(dataset) - val_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False)
+    return (train_loader, val_loader)
 
 
 def train_one_epoch(
@@ -134,8 +142,20 @@ def train_one_epoch(
        f. accumulate loss.item() * batch size
     3. Return mean loss over all samples (accumulated_loss / total_samples)
     """
-    # TODO: implement training loop with gradient accumulation tracking
-    raise NotImplementedError("implement single epoch training")
+    model.train()
+    accumulated_loss  = 0.0
+    total_samples     = 0
+
+    for batch_inputs, batch_labels in train_loader:
+        optimiser.zero_grad()
+        predictions = model(batch_inputs)
+        loss        = loss_function(predictions, batch_labels)
+        loss.backward()
+        optimiser.step()
+        accumulated_loss += loss.item() * batch_inputs.shape[0]
+        total_samples    += batch_inputs.shape[0]
+
+    return accumulated_loss / total_samples
 
 
 def evaluate(
@@ -164,8 +184,22 @@ def evaluate(
          track max ratio seen so far
     3. Return (mean_val_loss, max_admissibility_ratio)
     """
-    # TODO: implement evaluation loop, return (val_loss, max_h_hat_over_h_star)
-    raise NotImplementedError("implement validation evaluation")
+    model.eval()
+    accumulated_loss   = 0.0
+    total_samples      = 0
+    max_ratio          = 0.0
+
+    with torch.no_grad():
+        for batch_inputs, batch_labels in val_loader:
+            predictions       = model(batch_inputs)
+            loss              = loss_function(predictions, batch_labels)
+            accumulated_loss += loss.item() * batch_inputs.shape[0]
+            total_samples    += batch_inputs.shape[0]
+            ratio             = (predictions / (batch_labels + 1e-8)).max().item()
+            if ratio > max_ratio:
+                max_ratio = ratio
+
+    return (accumulated_loss / total_samples, max_ratio)
 
 
 def main():
@@ -192,12 +226,34 @@ def main():
        a. train_one_epoch() → train_loss
        b. evaluate() → val_loss, admissibility_ratio
        c. Print epoch summary: "Epoch {n}: train={:.4f} val={:.4f} max_ratio={:.3f}"
-    5. After training: export_weights(model, WEIGHTS_PATH)
+    5. After training:
+       a. export_weights(model, WEIGHTS_PATH)          — binary format for C++ inference
+       b. torch.save(model.state_dict(), WEIGHTS_PT_PATH) — PyTorch format for visualisation
+       Both must be saved: C++ reads .bin, heuristic_quality.py reads .pt
     6. Print final admissibility summary:
        "Max h_hat/h* = {ratio:.3f} — weighted A* with ε≥{ratio:.2f} is valid"
     """
-    # TODO: wire together load, build, train loop, evaluate, export
-    raise NotImplementedError("implement full training pipeline")
+    inputs, labels   = load_dataset(DATA_PATH)
+    train_loader, val_loader = build_dataloaders(inputs, labels)
+    print(f"Dataset: {len(inputs):,} samples  "
+          f"train={len(train_loader.dataset):,}  val={len(val_loader.dataset):,}")
+
+    model         = HeuristicNetwork()
+    loss_function = nn.MSELoss()
+    optimiser     = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    max_ratio = 0.0
+    for epoch in range(1, NUM_EPOCHS + 1):
+        train_loss              = train_one_epoch(model, train_loader, optimiser, loss_function)
+        val_loss, max_ratio     = evaluate(model, val_loader, loss_function)
+        print(f"Epoch {epoch:3d}: train={train_loss:.6f}  val={val_loss:.6f}  "
+              f"max_ratio={max_ratio:.3f}")
+
+    export_weights(model, WEIGHTS_PATH)
+    torch.save(model.state_dict(), WEIGHTS_PT_PATH)
+    print(f"Weights saved → {WEIGHTS_PATH}")
+    print(f"Max h_hat/h* = {max_ratio:.3f} — "
+          f"weighted A* with ε≥{max_ratio:.2f} is valid")
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 // environment/Environment.cpp
 #include "Environment.h"
-#include <fstream>
+#include "../utils/ProbabilityUtils.h"
 #include <random>
 #include <stdexcept>
 
@@ -16,6 +16,7 @@ Environment::Environment(int width, int height)
     if (width <= 0 || height <= 0 || width * height > MAX_CELLS)
         throw invalid_argument("Grid dimensions out of range");
 
+    cellLogOdds_.assign(width * height, LOG_ODDS_PRIOR);
     grid_[startPos_.x][startPos_.y].setCellType(CellType::START);
     grid_[goalPos_.x][goalPos_.y].setCellType(CellType::GOAL);
 }
@@ -87,6 +88,35 @@ void Environment::reset()
             if (grid_[x][y].getCellType() == CellType::VISITED ||
                 grid_[x][y].getCellType() == CellType::PATH)
                 grid_[x][y].setCellType(CellType::EMPTY);
+}
+
+// ---- Belief grid ------------------------------------------------------------
+
+void Environment::updateBelief(int x, int y, bool sensorFired,
+                                double truePositiveRate, double falsePositiveRate)
+{
+    if (!inBounds(x, y)) return;
+    int index          = toIndex(x, y);
+    cellLogOdds_[index] = ProbabilityUtils::logOddsUpdate(
+        cellLogOdds_[index], truePositiveRate, falsePositiveRate, sensorFired,
+        LOG_ODDS_MIN, LOG_ODDS_MAX);
+}
+
+double Environment::getBeliefAt(int x, int y) const
+{
+    if (!inBounds(x, y)) return 0.0;
+    return ProbabilityUtils::logOddsToProb(cellLogOdds_[toIndex(x, y)]);
+}
+
+double Environment::getLogOddsAt(int x, int y) const
+{
+    if (!inBounds(x, y)) return LOG_ODDS_MIN;
+    return cellLogOdds_[toIndex(x, y)];
+}
+
+void Environment::resetBeliefs(double logOddsPrior)
+{
+    fill(cellLogOdds_.begin(), cellLogOdds_.end(), logOddsPrior);
 }
 
 // ---- File I/O ---------------------------------------------------------------

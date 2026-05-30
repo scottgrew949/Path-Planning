@@ -37,7 +37,13 @@
 #include "../environment/DynamicEnvironment.h"
 #include "../rl/RLEnvironment.h"
 #include "../planning/algorithms/AStar.h"
+#include "../planning/algorithms/Dijkstra.h"
+#include "../planning/algorithms/BFS.h"
+#include "../planning/algorithms/BidirectionalAStar.h"
+#include "../planning/algorithms/ThetaStar.h"
+#include "../planning/algorithms/JPS.h"
 #include "../planning/algorithms/DStarLite.h"
+#include "../planning/algorithms/CBS.h"
 #include "../planning/hybrid/NeuralAStar.h"
 
 namespace py = pybind11;
@@ -179,6 +185,85 @@ public:
         return convertPositions(path);
     }
 
+    std::vector<std::vector<int>> findPathDijkstra(int startX, int startY, int goalX, int goalY)
+    {
+        Dijkstra dijkstra;
+        std::vector<Position> path = dijkstra.findPath(
+            environment_, Position(startX, startY), Position(goalX, goalY));
+        nodesExplored_ = dijkstra.getNodesExplored();
+        return convertPositions(path);
+    }
+
+    std::vector<std::vector<int>> findPathBFS(int startX, int startY, int goalX, int goalY)
+    {
+        BFS bfs;
+        std::vector<Position> path = bfs.findPath(
+            environment_, Position(startX, startY), Position(goalX, goalY));
+        nodesExplored_ = bfs.getNodesExplored();
+        return convertPositions(path);
+    }
+
+    std::vector<std::vector<int>> findPathBidirAStar(int startX, int startY, int goalX, int goalY)
+    {
+        BidirectionalAStar bidirAstar;
+        std::vector<Position> path = bidirAstar.findPath(
+            environment_, Position(startX, startY), Position(goalX, goalY));
+        nodesExplored_ = bidirAstar.getNodesExplored();
+        return convertPositions(path);
+    }
+
+    std::vector<std::vector<int>> findPathThetaStar(int startX, int startY, int goalX, int goalY)
+    {
+        ThetaStar thetaStar;
+        std::vector<Position> path = thetaStar.findPath(
+            environment_, Position(startX, startY), Position(goalX, goalY));
+        nodesExplored_ = thetaStar.getNodesExplored();
+        return convertPositions(path);
+    }
+
+    std::vector<std::vector<int>> findPathJPS(int startX, int startY, int goalX, int goalY)
+    {
+        JPS jps;
+        std::vector<Position> path = jps.findPath(
+            environment_, Position(startX, startY), Position(goalX, goalY));
+        nodesExplored_ = jps.getNodesExplored();
+        return convertPositions(path);
+    }
+
+    // Belief grid forwarding
+    void   updateBelief  (int x, int y, bool sensorFired, double tpr, double fpr)
+                         { environment_.updateBelief(x, y, sensorFired, tpr, fpr); }
+    double getBeliefAt   (int x, int y) const { return environment_.getBeliefAt(x, y); }
+    double getLogOddsAt  (int x, int y) const { return environment_.getLogOddsAt(x, y); }
+    void   resetBeliefs  (double logOddsPrior = Environment::LOG_ODDS_PRIOR)
+                         { environment_.resetBeliefs(logOddsPrior); }
+
+    // CBS multi-agent pathfinding.
+    // agentSpecs: [[sx0,sy0,gx0,gy0], [sx1,sy1,gx1,gy1], ...]
+    // Returns:    [path0, path1, ...] where each path is [[x,y], ...]
+    //             Empty outer list = no collision-free solution found.
+    std::vector<std::vector<std::vector<int>>> findPathsCBS(
+        const std::vector<std::vector<int>>& agentSpecs)
+    {
+        std::vector<Agent> agents;
+        for (const auto& spec : agentSpecs)
+        {
+            if (spec.size() < 4) continue;
+            agents.emplace_back(Position(spec[0], spec[1]),
+                                Position(spec[2], spec[3]));
+        }
+        CBS cbs;
+        MultiAgentPaths paths = cbs.findPaths(environment_, agents);
+        cbsNodesExpanded_ = cbs.getNodesExpanded();
+
+        std::vector<std::vector<std::vector<int>>> result;
+        for (const auto& path : paths)
+            result.push_back(convertPositions(path));
+        return result;
+    }
+
+    int getCBSNodesExpanded() const { return cbsNodesExpanded_; }
+
     int getNodesExplored() const { return nodesExplored_; }
 
     // Returns true if cell (x,y) contains an obstacle.
@@ -224,7 +309,8 @@ public:
 private:
     Environment    environment_;
     RLEnvironment  rlEnvironment_;
-    int            nodesExplored_ = 0;
+    int            nodesExplored_     = 0;
+    int            cbsNodesExpanded_  = 0;
 };
 
 // ---- DynamicGridEnvironment -------------------------------------------------
@@ -323,6 +409,14 @@ public:
     int getDynamicObstacleCount() const { return environment_.getDynamicObstacleCount(); }
     int getTickCount()            const { return environment_.getTickCount();            }
 
+    // Belief grid forwarding
+    void   updateBelief  (int x, int y, bool sensorFired, double tpr, double fpr)
+                         { environment_.updateBelief(x, y, sensorFired, tpr, fpr); }
+    double getBeliefAt   (int x, int y) const { return environment_.getBeliefAt(x, y); }
+    double getLogOddsAt  (int x, int y) const { return environment_.getLogOddsAt(x, y); }
+    void   resetBeliefs  (double logOddsPrior = Environment::LOG_ODDS_PRIOR)
+                         { environment_.resetBeliefs(logOddsPrior); }
+
 private:
     DynamicEnvironment environment_;
     int                nodesExploredLastReplan_ = 0;
@@ -353,8 +447,18 @@ PYBIND11_MODULE(pathplanning, module)
         .def("getLineOfSight",  &GridEnvironment::getLineOfSight)
         .def("getExpertAction",    &GridEnvironment::getExpertAction)
         .def("getExpertTrajectory",&GridEnvironment::getExpertTrajectory)
-        .def("findPath",           &GridEnvironment::findPath)
+        .def("findPath",            &GridEnvironment::findPath)
+        .def("findPathDijkstra",   &GridEnvironment::findPathDijkstra)
+        .def("findPathBFS",        &GridEnvironment::findPathBFS)
+        .def("findPathBidirAStar", &GridEnvironment::findPathBidirAStar)
+        .def("findPathThetaStar",  &GridEnvironment::findPathThetaStar)
+        .def("findPathJPS",        &GridEnvironment::findPathJPS)
         .def("getNodesExplored",   &GridEnvironment::getNodesExplored)
+        .def("updateBelief",       &GridEnvironment::updateBelief)
+        .def("getBeliefAt",        &GridEnvironment::getBeliefAt)
+        .def("getLogOddsAt",       &GridEnvironment::getLogOddsAt)
+        .def("resetBeliefs",       &GridEnvironment::resetBeliefs,
+             py::arg("logOddsPrior") = Environment::LOG_ODDS_PRIOR)
         .def("isObstacle",         &GridEnvironment::isObstacle)
         .def("isValid",            &GridEnvironment::isValid)
 
@@ -368,7 +472,12 @@ PYBIND11_MODULE(pathplanning, module)
              py::arg("startX"),
              py::arg("startY"),
              py::arg("goalX"),
-             py::arg("goalY"));
+             py::arg("goalY"))
+        .def("findPathsCBS",         &GridEnvironment::findPathsCBS,
+             py::arg("agentSpecs"),
+             "CBS multi-agent pathfinding. agentSpecs=[[sx,sy,gx,gy],...]. "
+             "Returns list of collision-free paths, empty if no solution.")
+        .def("getCBSNodesExpanded",  &GridEnvironment::getCBSNodesExpanded);
 
     // ---- DynamicGridEnvironment ---------------------------------------------
     py::class_<DynamicGridEnvironment>(module, "DynamicGridEnvironment")
@@ -398,7 +507,12 @@ PYBIND11_MODULE(pathplanning, module)
         .def("getWidth",              &DynamicGridEnvironment::getWidth)
         .def("getHeight",             &DynamicGridEnvironment::getHeight)
         .def("getDynamicObstacleCount", &DynamicGridEnvironment::getDynamicObstacleCount)
-        .def("getTickCount",          &DynamicGridEnvironment::getTickCount);
+        .def("getTickCount",          &DynamicGridEnvironment::getTickCount)
+        .def("updateBelief",          &DynamicGridEnvironment::updateBelief)
+        .def("getBeliefAt",           &DynamicGridEnvironment::getBeliefAt)
+        .def("getLogOddsAt",          &DynamicGridEnvironment::getLogOddsAt)
+        .def("resetBeliefs",          &DynamicGridEnvironment::resetBeliefs,
+             py::arg("logOddsPrior") = Environment::LOG_ODDS_PRIOR);
 
     // ---- NeuralAStar --------------------------------------------------------
     // CONCEPT — Registering NeuralAStar as a first-class Python object:

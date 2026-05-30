@@ -75,6 +75,41 @@ public:
     static double entropy(const std::vector<double>& probs);
 
     // -------------------------------------------------------------------------
+    // Log-odds occupancy grid (production sensor fusion)
+    // -------------------------------------------------------------------------
+    //
+    // CONCEPT — Why log-odds over raw probability?
+    //   Raw Bayes updates multiply and divide small probabilities each step.
+    //   Over many updates probabilities drift toward exactly 0 or 1 and lock
+    //   there permanently — a single false positive can freeze a cell as
+    //   "definitely occupied" forever.
+    //
+    //   Log-odds l = log(p/(1-p)) transforms the update into addition:
+    //     l_new = l_old + log(TPR/FPR)           if sensor fires
+    //     l_new = l_old + log((1-TPR)/(1-FPR))   if sensor silent
+    //   Clamping l to [logOddsMin, logOddsMax] prevents saturation while
+    //   still letting evidence accumulate. This is exactly how ROS costmap_2d
+    //   and every production occupancy grid update works.
+    //
+    // logOddsUpdate — returns updated log-odds value after one sensor reading.
+    //   currentLogOdds: current l value for this cell
+    //   truePositiveRate / falsePositiveRate: sensor model (same semantics as bayesUpdateSensor)
+    //   sensorFired: true if sensor reported an obstacle at this cell
+    //   logOddsMin / logOddsMax: clamp range (typically -20 / +20)
+    static double logOddsUpdate(double currentLogOdds,
+                                double truePositiveRate,
+                                double falsePositiveRate,
+                                bool   sensorFired,
+                                double logOddsMin = -20.0,
+                                double logOddsMax =  20.0);
+
+    // Convert log-odds back to probability in [0, 1].
+    static double logOddsToProb(double logOdds);
+
+    // Convert probability in (0,1) to log-odds. Clamps away from 0 and 1.
+    static double probToLogOdds(double probability);
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

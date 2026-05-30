@@ -223,17 +223,17 @@ case $TARGET in
     cd python && python benchmark_phase10.py && cd ..
     ;;
 
-  19)
-    echo "==> Running live path planning demo (A* + dynamic obstacles)..."
-    # Requires: ./build.sh 3 first (pybind11 .so)
-    # Requires: pip install matplotlib numpy
+  20)
+    echo "==> MVP: Unified benchmark — all algorithms, 100 mazes..."
+    # Requires: ./build.sh 3 (pybind11 .so). Neural A* optional (./build.sh 12)
+    # Output:   python/data/benchmark_all_results.csv + stdout table
     set -e
     source venv/bin/activate 2>/dev/null || true
-    python python/live_demo.py
+    python python/benchmark_all.py
     ;;
 
   *)
-    echo "Unknown target '$TARGET'. Valid: 1–19"
+    echo "Unknown target '$TARGET'. Valid: 1–18, 20"
     exit 1
     ;;
 

@@ -80,7 +80,7 @@ class PPOAgent:
             clipped     = torch.clamp(ratio, 1.0 - CLIP_EPSILON, 1.0 + CLIP_EPSILON)
             actor_loss  = -torch.min(ratio * advantages, clipped * advantages).mean()
 
-            critic_loss = nn.functional.mse_loss(new_values.squeeze(), returns)
+            critic_loss = nn.functional.mse_loss(new_values.squeeze(-1), returns)
 
             loss = actor_loss + 0.5 * critic_loss - ENTROPY_COEF * entropy
 

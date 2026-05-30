@@ -56,6 +56,35 @@ public:
     // Reset visited markings and PATH overlays; preserve obstacles/start/goal.
     void reset();
 
+    // ---- Log-odds occupancy grid ---------------------------------------------
+    //
+    // CONCEPT — Production sensor fusion standard:
+    //   Each cell stores log-odds l = log(p/(1-p)) instead of raw probability.
+    //   Updates are additive (no multiply/divide), numerically stable, and clamped
+    //   to [LOG_ODDS_MIN, LOG_ODDS_MAX] to prevent saturation lock-in.
+    //   getBeliefAt() converts back to probability for external callers and
+    //   visualization — internal storage always in log-odds space.
+    //
+    //   This mirrors ROS costmap_2d and every production occupancy grid system.
+
+    static constexpr double LOG_ODDS_MIN   = -20.0;   // clamp floor (~p ≈ 2e-9)
+    static constexpr double LOG_ODDS_MAX   =  20.0;   // clamp ceiling (~p ≈ 1 - 2e-9)
+    static constexpr double LOG_ODDS_PRIOR = -2.197;  // log(0.1/0.9) — 10% prior
+
+    // Apply one sensor reading to cell (x, y). Uses log-odds additive update.
+    void updateBelief(int x, int y, bool sensorFired,
+                      double truePositiveRate, double falsePositiveRate);
+
+    // Return P(occupied) in [0,1] for cell (x, y). Converts from log-odds.
+    // Returns 0.0 if out of bounds.
+    double getBeliefAt(int x, int y) const;
+
+    // Return raw log-odds for cell (x, y). Returns LOG_ODDS_MIN if out of bounds.
+    double getLogOddsAt(int x, int y) const;
+
+    // Reset all cells to LOG_ODDS_PRIOR (or supplied log-odds value).
+    void resetBeliefs(double logOddsPrior = LOG_ODDS_PRIOR);
+
     // ---- Queries ----------------------------------------------------------
 
     bool isObstacle(const Position& p) const;   // O(1) via bitset
@@ -98,6 +127,10 @@ private:
     // Bit-parallel obstacle index — mirrors grid_ obstacle state.
     // Bit i = 1 means the cell at toIndex(x,y) is an obstacle.
     std::bitset<MAX_CELLS> obstacleBits_;
+
+    // Log-odds occupancy grid — one double per cell in [LOG_ODDS_MIN, LOG_ODDS_MAX].
+    // Stores log(p/(1-p)) for each cell. Additive updates, clamp-bounded.
+    std::vector<double> cellLogOdds_;
 
     Position startPos_;
     Position goalPos_;

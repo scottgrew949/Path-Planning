@@ -72,11 +72,9 @@ class HeuristicNetwork(nn.Module):
         is good matters more than the mechanics.
         """
         super().__init__()
-        # TODO: define self.layer_one, self.layer_two, self.output_layer as nn.Linear
-        # layer_one:    input_size  → hidden_size
-        # layer_two:    hidden_size → hidden_size
-        # output_layer: hidden_size → OUTPUT_SIZE (1)
-        raise NotImplementedError("define the three nn.Linear layers")
+        self.layer_one    = nn.Linear(input_size,  hidden_size)
+        self.layer_two    = nn.Linear(hidden_size, hidden_size)
+        self.output_layer = nn.Linear(hidden_size, OUTPUT_SIZE)
 
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         """
@@ -94,8 +92,9 @@ class HeuristicNetwork(nn.Module):
         2. features = relu(layer_two(features))
         3. return output_layer(features)   ← no activation on final layer
         """
-        # TODO: chain layer_one → relu → layer_two → relu → output_layer
-        raise NotImplementedError("implement forward pass")
+        features = torch.relu(self.layer_one(input_tensor))
+        features = torch.relu(self.layer_two(features))
+        return self.output_layer(features)
 
 
 def export_weights(model: HeuristicNetwork, output_path: str) -> None:
@@ -135,5 +134,15 @@ def export_weights(model: HeuristicNetwork, output_path: str) -> None:
        d. Write W.astype(np.float64).tobytes()   ← ensures 8-byte doubles, not 4-byte floats
        e. Write b.astype(np.float64).tobytes()
     """
-    # TODO: open file, write header, then write each layer's weights and biases
-    raise NotImplementedError("implement binary weight export")
+    layers = [model.layer_one, model.layer_two, model.output_layer]
+    with open(output_path, 'wb') as binary_file:
+        binary_file.write(struct.pack('<I', MAGIC_NUMBER))
+        binary_file.write(struct.pack('<B', 1))
+        binary_file.write(struct.pack('<I', len(layers)))
+        for layer in layers:
+            weight_matrix = layer.weight.detach().numpy()
+            bias_vector   = layer.bias.detach().numpy()
+            rows, cols    = weight_matrix.shape
+            binary_file.write(struct.pack('<II', rows, cols))
+            binary_file.write(weight_matrix.astype(np.float64).tobytes())
+            binary_file.write(bias_vector.astype(np.float64).tobytes())

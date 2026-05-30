@@ -10,7 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-CSV_PATH = Path(__file__).parent / "training_data.csv"
+CSV_PATH = Path(__file__).parent.parent.parent / "qlearning_training.csv"
 
 def load(path: Path):
     episodes, rewards, steps, goal_reached, epsilons = [], [], [], [], []

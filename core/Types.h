@@ -31,7 +31,8 @@ enum class AlgorithmType
     THETA_STAR,
     JPS,
     RRT,
-    NEURAL_ASTAR  // learned heuristic — planning/hybrid/NeuralAStar
+    NEURAL_ASTAR, // learned heuristic — planning/hybrid/NeuralAStar
+    CBS           // Conflict-Based Search — multi-agent pathfinding
 };
 
 // ---- PathResult -------------------------------------------------------------
@@ -48,6 +49,58 @@ struct PathResult
 
     PathResult();  // zero-initialise all numeric fields
 };
+
+// ---- Multi-agent types (CBS) ------------------------------------------------
+
+// A single agent defined by its start and goal positions.
+struct Agent
+{
+    Position start;
+    Position goal;
+    Agent(Position start, Position goal) : start(start), goal(goal) {}
+};
+
+// A vertex constraint: agent agentIndex must NOT be at position at timestep.
+struct Constraint
+{
+    int      agentIndex;
+    Position position;
+    int      timestep;
+
+    bool operator==(const Constraint& other) const
+    {
+        return agentIndex == other.agentIndex
+            && position   == other.position
+            && timestep   == other.timestep;
+    }
+};
+
+// An edge constraint: agent agentIndex must not traverse from posFrom to posTo
+// at timestep (prevents swap conflicts between agents).
+struct EdgeConstraint
+{
+    int      agentIndex = 0;
+    Position posFrom    = Position(0, 0);
+    Position posTo      = Position(0, 0);
+    int      timestep   = 0;
+};
+
+// A conflict between two agents detected in the CBS high-level search.
+struct Conflict
+{
+    enum class Type { VERTEX, EDGE };
+    Type     type      = Type::VERTEX;
+    int      agent1    = 0;
+    int      agent2    = 0;
+    Position position  = Position(0, 0);  // vertex conflict location (or posFrom for edge)
+    Position position2 = Position(0, 0); // posTo for edge conflict (unused for vertex)
+    int      timestep  = 0;
+};
+
+// Result of a CBS solve: one time-stamped path per agent.
+// Index: paths[agentIndex][timestep] = Position.
+// Shorter paths are padded with the goal position (agent waits at goal).
+using MultiAgentPaths = std::vector<std::vector<Position>>;
 
 // ---- Action -----------------------------------------------------------------
 // The four moves the RL agent can take from any grid cell.
