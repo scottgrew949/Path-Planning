@@ -101,10 +101,12 @@ protected:
     Action selectAction(const Position& position) const;
 
     // Apply one Bellman update to Q(currentPosition, actionTaken).
+    // done: true when nextPosition is the terminal goal state — zeroes future Q.
     void updateQValue(const Position& currentPosition,
                       Action          actionTaken,
                       double          reward,
-                      const Position& nextPosition);
+                      const Position& nextPosition,
+                      bool            done);
 
     // Decay epsilon by one step: epsilon_ = max(epsilonMin_, epsilon_ * epsilonDecay_)
     void decayEpsilon();

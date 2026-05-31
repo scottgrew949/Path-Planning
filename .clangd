@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - "-I/Users/scott/Desktop/C++ review projects/PathPlanning/venv/lib/python3.12/site-packages/pybind11/include"
+    - "-I/usr/local/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/include/python3.12"
+    - "-std=c++17"

@@ -41,6 +41,8 @@
 #include "planning/algorithms/JPS.h"
 #include "planning/algorithms/DStarLite.h"
 #include "planning/algorithms/RRT.h"
+#include "planning/algorithms/MCTS.h"
+#include "planning/algorithms/CBS.h"
 #include "utils/ProbabilityUtils.h"
 #include "visualization/Visualizer.h"
 #include "rl/RLEnvironment.h"
@@ -99,7 +101,6 @@ int main()
     Visualizer::printSection("Environment Setup");
 
     Environment env = buildScenario();
-    Visualizer::displayGrid(env);
 
     // =========================================================================
     // Section 2: Run all algorithms via IPathfinder interface
@@ -107,7 +108,6 @@ int main()
     Visualizer::printSection("Pathfinding Algorithms");
     AStar astar;
     PathResult r = runTimed(astar, env, env.getStart(), env.getGoal());
-    Visualizer::displayPath(env, r.path, r.algorithmName);
 
     vector<unique_ptr<IPathfinder>> algos;
     algos.push_back(make_unique<AStar>());
@@ -118,6 +118,7 @@ int main()
     algos.push_back(make_unique<JPS>());
     algos.push_back(make_unique<DStarLite>());
     algos.push_back(make_unique<RRT>());
+    algos.push_back(make_unique<MCTS>(2000, 1.414, 300));
 
     vector<PathResult> results;
     for (unique_ptr<IPathfinder>& algo : algos)
@@ -125,7 +126,6 @@ int main()
         env.reset();
         PathResult r = runTimed(*algo, env, env.getStart(), env.getGoal());
         results.push_back(r);
-        Visualizer::displayPath(env, r.path, r.algorithmName);
         Visualizer::displayStats(r.algorithmName, r.path, r.elapsedMs, r.pathCost);
     }
 
@@ -135,6 +135,43 @@ int main()
     Visualizer::printSection("Algorithm Comparison");
 
     Visualizer::displaySummaryTable(results);
+
+    // =========================================================================
+    // Section 3b: Multi-Agent Pathfinding (CBS)
+    // =========================================================================
+    Visualizer::printSection("Multi-Agent Pathfinding (CBS)");
+
+    {
+        // Three agents on the same labyrinth — non-overlapping start/goal pairs.
+        // Agents are spaced apart so the initial individual paths are likely
+        // conflict-free or require only a small number of CT node expansions.
+        std::vector<Agent> agents = {
+            Agent(Position(0,  0), Position(10, 10)),
+            Agent(Position(0,  5), Position(10,  5)),
+            Agent(Position(0, 10), Position(10,  0))
+        };
+
+        CBS cbs;
+        MultiAgentPaths agentPaths = cbs.findPaths(env, agents);
+
+        cout << "Agents: " << agents.size() << "\n";
+        if (agentPaths.empty())
+        {
+            cout << "No solution found within search budget.\n";
+        }
+        else
+        {
+            int totalCost = 0;
+            for (size_t agentIndex = 0; agentIndex < agentPaths.size(); ++agentIndex)
+            {
+                int pathLength = static_cast<int>(agentPaths[agentIndex].size());
+                totalCost += pathLength;
+                cout << "  Agent " << agentIndex << " path length: " << pathLength << " steps\n";
+            }
+            cout << "Total cost (sum of path lengths): " << totalCost << "\n";
+            cout << "CT nodes expanded: " << cbs.getNodesExpanded() << "\n";
+        }
+    }
 
     // =========================================================================
     // Section 4: Probability — sensor fusion demo
@@ -374,7 +411,6 @@ int main()
                                                               dynamicEnv.getStart(),
                                                               dynamicEnv.getGoal());
     cout << "--- Tick 0 (initial) ---\n";
-    Visualizer::displayPath(dynamicEnv, dynamicPath, "D* Lite");
     if (dynamicPath.empty())
         cout << "  [no path found]\n";
     else
@@ -395,7 +431,6 @@ int main()
                                                dynamicEnv.getStart(),
                                                dynamicEnv.getGoal());
             cout << "--- Tick " << tick << " ---\n";
-            Visualizer::displayPath(dynamicEnv, dynamicPath, "D* Lite");
             if (dynamicPath.empty())
                 cout << "  [no path — obstacles blocked all routes]\n\n";
             else

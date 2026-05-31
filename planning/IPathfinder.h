@@ -60,7 +60,9 @@ protected:
         while (current != start)
         {
             path.push_back(current);
-            current = arrivedFrom.at(current);
+            auto it = arrivedFrom.find(current);
+            if (it == arrivedFrom.end()) return {};
+            current = it->second;
         }
         path.push_back(start);
         std::reverse(path.begin(), path.end());

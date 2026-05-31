@@ -52,6 +52,8 @@ case $TARGET in
         planning/algorithms/JPS.cpp \
         planning/algorithms/DStarLite.cpp \
         planning/algorithms/RRT.cpp \
+        planning/algorithms/MCTS.cpp \
+        planning/algorithms/CBS.cpp \
         rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
         rl/QTable.cpp rl/RLEnvironment.cpp \
         planning/CurriculumScheduler.cpp \
@@ -77,6 +79,8 @@ case $TARGET in
         planning/algorithms/JPS.cpp \
         planning/algorithms/DStarLite.cpp \
         planning/algorithms/RRT.cpp \
+        planning/algorithms/MCTS.cpp \
+        planning/algorithms/CBS.cpp \
         rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
         rl/QTable.cpp rl/RLEnvironment.cpp \
         planning/CurriculumScheduler.cpp \
@@ -223,6 +227,16 @@ case $TARGET in
     cd python && python benchmark_phase10.py && cd ..
     ;;
 
+  19)
+    echo "==> DQN training with PER + HER (goal-conditioned, sparse reward)..."
+    # Requires: ./build.sh 3 (pybind11 .so), pip install torch
+    # PER: prioritized experience replay — high-TD-error transitions sampled more often
+    # HER: hindsight experience replay — failed episodes relabelled as successes
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_dqn_her.py
+    ;;
+
   20)
     echo "==> MVP: Unified benchmark — all algorithms, 100 mazes..."
     # Requires: ./build.sh 3 (pybind11 .so). Neural A* optional (./build.sh 12)
@@ -233,7 +247,7 @@ case $TARGET in
     ;;
 
   *)
-    echo "Unknown target '$TARGET'. Valid: 1–18, 20"
+    echo "Unknown target '$TARGET'. Valid: 1–20"
     exit 1
     ;;
 

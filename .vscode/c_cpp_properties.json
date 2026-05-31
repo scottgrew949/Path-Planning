@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/Users/scott/Desktop/C++ review projects/PathPlanning/venv/lib/python3.12/site-packages/pybind11/include",
+                "/usr/local/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/include/python3.12"
+            ],
+            "cppStandard": "c++17",
+            "macFrameworkPath": ["/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"]
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,16 @@
+{
+    "files.exclude": {
+        "build/": true,
+        "**/*.o": true,
+        "**/*.so": true,
+        "**/*.pyc": true,
+        "**/*.pth": true,
+        "**/*.npy": true,
+        "**/*.bin": true,
+        "**/*.csv": true,
+        "**/__pycache__/": true,
+        "pathplanning": true,
+        "pathplanning_classical": true,
+        "venv/": true
+    }
+}

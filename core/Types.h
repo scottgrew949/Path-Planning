@@ -32,7 +32,8 @@ enum class AlgorithmType
     JPS,
     RRT,
     NEURAL_ASTAR, // learned heuristic — planning/hybrid/NeuralAStar
-    CBS           // Conflict-Based Search — multi-agent pathfinding
+    CBS,          // Conflict-Based Search — multi-agent pathfinding
+    MCTS          // Monte Carlo Tree Search — simulation-based planning
 };
 
 // ---- PathResult -------------------------------------------------------------

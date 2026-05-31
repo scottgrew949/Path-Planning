@@ -60,7 +60,8 @@ class PPOAgent:
             if done:
                 G = 0.0
             G = reward + self.gamma * G
-            returns.insert(0, G)
+            returns.append(G)
+        returns.reverse()
         return torch.FloatTensor(returns)
 
     def update(self,
@@ -73,7 +74,7 @@ class PPOAgent:
         for _ in range(self.epochs):
             new_action_probs, new_values = self.network(states)
             dist          = Categorical(new_action_probs)
-            new_log_probs = dist.log_prob(actions)
+            new_log_probs = dist.log_prob(actions.squeeze(-1))
             entropy       = dist.entropy().mean()
 
             ratio       = torch.exp(new_log_probs - log_probs)
@@ -88,6 +89,6 @@ class PPOAgent:
             loss.backward()
             self.optimizer.step()
 
-            total_loss = loss.item()
+            total_loss += loss.item()
 
-        return total_loss
+        return total_loss / self.epochs

@@ -75,7 +75,6 @@ def select_action(state_tensor: torch.Tensor,
     with torch.no_grad():
         q_values = main_network(state_tensor)
     return q_values.argmax().item()
-    #
     # CONCEPT — torch.no_grad()
     #   Disables gradient tracking during inference — faster and uses less memory.
     #   Gradients are only needed during loss.backward(), not during action selection.
@@ -118,10 +117,10 @@ def train():
             reward = result[2]
             done = bool(result[3])
 
-            buffer.push(state_tensor, action, reward,
-            state_to_tensor(next_state, GRID_WIDTH, GRID_HEIGHT, env), done)
+            next_state_tensor = state_to_tensor(next_state, GRID_WIDTH, GRID_HEIGHT, env)
+            buffer.push(state_tensor, action, reward, next_state_tensor, done)
             episode_reward += reward
-            state_tensor = state_to_tensor(next_state, GRID_WIDTH, GRID_HEIGHT, env)
+            state_tensor = next_state_tensor
             total_steps += 1     
 
             if buffer.is_ready(BATCH_SIZE):

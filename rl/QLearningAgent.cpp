@@ -29,7 +29,7 @@ TrainingResult QLearningAgent::runEpisode(int episodeNumber, int maxStepsPerEpis
         Action     action     = selectAction(currentPosition);
         StepResult stepResult = env_.step(action);
 
-        updateQValue(currentPosition, action, stepResult.reward, stepResult.newPosition);
+        updateQValue(currentPosition, action, stepResult.reward, stepResult.newPosition, stepResult.done);
 
         totalReward      += stepResult.reward;
         ++stepCount;

@@ -37,7 +37,7 @@ TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
         StepResult stepResult = env_.step(action);
 
         // 2. Direct RL update — same Bellman update as Q-learning.
-        updateQValue(currentPosition, action, stepResult.reward, stepResult.newPosition);
+        updateQValue(currentPosition, action, stepResult.reward, stepResult.newPosition, stepResult.done);
 
         totalReward     += stepResult.reward;
         ++stepCount;
@@ -92,7 +92,8 @@ void DynaQAgent::planningUpdate()
         const Position& sampledNext   = value.second;
 
         // Apply Bellman update using the imagined transition.
-        updateQValue(sampledPos, sampledAction, sampledReward, sampledNext);
+        // Planning replays never carry terminal status — model doesn't store done.
+        updateQValue(sampledPos, sampledAction, sampledReward, sampledNext, false);
     }
 
     // CONCEPT — Why does this work?

@@ -47,7 +47,7 @@ RLAgent::RLAgent(RLEnvironment& environment,
       realDistribution_(0.0, 1.0),
       actionDistribution_(0, 3)
 {
-    // Validate hyperparameters (I-5) — bad values produce silent failures.
+    // Validate hyperparameters — throws std::invalid_argument on bad values.
     if (learningRate_   <= 0.0 || learningRate_   >  1.0) throw std::invalid_argument("learningRate must be in (0, 1]");
     if (discountFactor_ <  0.0 || discountFactor_ >  1.0) throw std::invalid_argument("discountFactor must be in [0, 1]");
     if (epsilonStart    <  0.0 || epsilonStart    >  1.0) throw std::invalid_argument("epsilonStart must be in [0, 1]");
@@ -177,10 +177,11 @@ Action RLAgent::selectAction(const Position& position) const
 void RLAgent::updateQValue(const Position& currentPosition,
                             Action          actionTaken,
                             double          reward,
-                            const Position& nextPosition)
+                            const Position& nextPosition,
+                            bool            done)
 {
     double currentQValue  = qTable_.getValue(currentPosition, actionTaken);
-    double bestNextQValue = qTable_.getMaxValue(nextPosition);
+    double bestNextQValue = done ? 0.0 : qTable_.getMaxValue(nextPosition);
     double bellmanTarget  = reward + discountFactor_ * bestNextQValue;
     double newQValue      = currentQValue + learningRate_ * (bellmanTarget - currentQValue);
     qTable_.setValue(currentPosition, actionTaken, newQValue);
