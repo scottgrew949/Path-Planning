@@ -131,7 +131,7 @@ public:
 
 private:
     int maxTimesteps_;
-    int maxCTNodes_;
+    int maxCTNodes_;    // 0 = no cap; >0 = hard limit on CT expansions
     int nodesExpanded_;
 
     // ---- Low-level planner --------------------------------------------------

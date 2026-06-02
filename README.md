@@ -31,18 +31,37 @@ Built entirely without external AI/ML libraries. Every algorithm, data structure
 All commands run from the project root.
 
 ```bash
-./build.sh        # full binary — all 8 algorithms + Q-Learning + Dyna-Q (default)
-./build.sh 1      # classical pathfinding only (no RL, fastest compile)
-./build.sh 2      # full binary (same as default)
+./build.sh        # full binary — planners + Q-Learning + Dyna-Q + TD(λ) (default)
+./build.sh 1      # full binary with debug symbols (-g)
+./build.sh 2      # full binary with -O2 (same sources as default)
 ./build.sh 3      # Python .so binding via pybind11 (required before DQN)
 ./build.sh 4      # DQN deep RL training (PyTorch)
 ./build.sh 5      # tabular RL training curves (matplotlib)
 ```
 
-Run the full binary:
+Run the interactive driver (one binary, all C++ and Python entry points):
 ```bash
+./build.sh 2
 ./pathplanning
 ```
+
+### Main menu
+
+| Key | Action |
+|-----|--------|
+| `1` | C++ demos (classical, CBS, Bayes, tabular RL, dynamic+RL, TD-λ, Neural A*) |
+| `2` | Python training scripts (heuristic net, DQN, PPO, …) |
+| `3` | Python benchmarks and plots |
+| `S` | Smoke tests — fast regression checks (~seconds) |
+| `G` | Golden path — quick end-to-end C++ tour (uses QUICK profile for RL) |
+| `A` | Run all C++ demos in sequence |
+| `B` | Build Python module (`./build.sh 3`) |
+| `T` | Toggle **FULL** / **QUICK** training (15k vs 1k curriculum episodes) |
+| `0` | Exit |
+
+**FULL** vs **QUICK** applies to tabular RL sections (menu 4, 5, 6, and option A). Classical planning is unchanged.
+
+**Neural A*** (C++ menu 7) needs `python/data/weights.bin` from Python Training → generate data → train heuristic (or `./build.sh 11`–`12`). The same weights are used by Python benchmarks via `./build.sh 3`.
 
 ---
 

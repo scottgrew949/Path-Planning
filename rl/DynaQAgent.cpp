@@ -1,5 +1,7 @@
 // rl/DynaQAgent.cpp
 #include "DynaQAgent.h"
+#include <stdexcept>
+#include <cmath>
 
 // ---- DynaQAgent constructor -------------------------------------------------
 
@@ -9,26 +11,27 @@ DynaQAgent::DynaQAgent(RLEnvironment& environment,
                        double         epsilonStart,
                        double         epsilonMin,
                        double         epsilonDecay,
-                       int            planningSteps)
+                       int            planningSteps,
+                       double         priorityThreshold)
     : RLAgent(environment, learningRate, discountFactor,
               epsilonStart, epsilonMin, epsilonDecay),
       planningSteps_(planningSteps),
-      keyDist_(0, 0)
+      priorityThreshold_(priorityThreshold)
 {
-    // model_ and modelKeys_ start empty — populated on first real transitions.
-    // No reserve/pre-allocation per spec: let them grow naturally.
-    // keyDist_ range is updated lazily in planningUpdate() as model grows.
+    if (planningSteps < 0)
+        throw std::invalid_argument("DynaQAgent: planningSteps must be >= 0");
+    if (priorityThreshold < 0.0)
+        throw std::invalid_argument("DynaQAgent: priorityThreshold must be >= 0");
 }
 
 // ---- runEpisode -------------------------------------------------------------
 
 TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
 {
-    // I-2: env_.reset() called exactly once per episode at start of runEpisode().
     Position currentPosition = env_.reset();
-    double totalReward = 0.0;
-    int    stepCount   = 0;
-    bool   goalReached = false;
+    double   totalReward     = 0.0;
+    int      stepCount       = 0;
+    bool     goalReached     = false;
 
     for (int step = 0; step < maxStepsPerEpisode; ++step)
     {
@@ -36,25 +39,29 @@ TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
         Action     action     = selectAction(currentPosition);
         StepResult stepResult = env_.step(action);
 
-        // 2. Direct RL update — same Bellman update as Q-learning.
-        updateQValue(currentPosition, action, stepResult.reward, stepResult.newPosition, stepResult.done);
+        // 2. Compute Bellman error BEFORE the update so the priority reflects
+        //    true pre-update surprise — the property that makes prioritized
+        //    sweeping work. Enqueue first, then apply the update.
+        enqueueIfSignificant(currentPosition, action,
+                             stepResult.reward, stepResult.newPosition,
+                             stepResult.done);
 
-        totalReward     += stepResult.reward;
+        // 3. Direct RL update.
+        updateQValue(currentPosition, action, stepResult.reward,
+                     stepResult.newPosition, stepResult.done);
+
+        totalReward += stepResult.reward;
         ++stepCount;
 
-        // 3. Update world model with this real transition.
-        //    If this (state, action) pair is new, push key to mirror vector.
-        ModelKey key{currentPosition, action};
-        bool isNewKey = (model_.find(key) == model_.end());
-        model_[key] = ModelValue{stepResult.reward, stepResult.newPosition};
-        if (isNewKey)
-        {
-            modelKeys_.push_back(key);
-        }
+        // 4. Update world model with this real transition — now includes done flag.
+        ModelKey modelKey{currentPosition, action};
+        model_[modelKey] = ModelTransition{stepResult.reward,
+                                           stepResult.newPosition,
+                                           stepResult.done};
 
         currentPosition = stepResult.newPosition;
 
-        // 4. Planning sweep — n imagined Bellman updates from model.
+        // 5. Prioritized planning sweep.
         planningUpdate();
 
         if (stepResult.done)
@@ -68,37 +75,73 @@ TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
     return TrainingResult(episodeNumber, totalReward, stepCount, goalReached, epsilon_);
 }
 
-// ---- planningUpdate ---------------------------------------------------------
+// ---- Private helpers --------------------------------------------------------
+
+double DynaQAgent::computeBellmanError(const Position& position,
+                                        Action          action,
+                                        double          reward,
+                                        const Position& nextPosition,
+                                        bool            done) const
+{
+    // CONCEPT — Bellman error without writing:
+    //   Mirrors updateQValue arithmetic exactly — including the done flag which
+    //   zeroes the future-value term for terminal transitions. Without done,
+    //   goal transitions would be over-prioritised by γ·maxQ(goal).
+    double currentQValue  = qTable_.getValue(position, action);
+    double bestNextQValue = done ? 0.0 : qTable_.getMaxValue(nextPosition);
+    double bellmanTarget  = reward + discountFactor_ * bestNextQValue;
+    return std::abs(bellmanTarget - currentQValue);
+}
+
+void DynaQAgent::enqueueIfSignificant(const Position& position,
+                                       Action          action,
+                                       double          reward,
+                                       const Position& nextPosition,
+                                       bool            done)
+{
+    double bellmanError = computeBellmanError(position, action, reward, nextPosition, done);
+    if (bellmanError > priorityThreshold_)
+        prioritizedTransitions_.push({bellmanError, {position, action}});
+}
 
 void DynaQAgent::planningUpdate()
 {
-    // Guard: skip entirely when no planning or model is empty (spec requirement).
-    if (planningSteps_ <= 0 || modelKeys_.empty()) return;
+    // CONCEPT — Cascading value propagation:
+    //   After updating Q(s, a), predecessors of s may now have significant
+    //   Bellman error. We scan modelKeys_ for predecessors and re-enqueue them.
+    //   This cascades value backwards through the model automatically.
 
-    // Update cached distribution range to match current model size.
-    keyDist_.param(std::uniform_int_distribution<int>::param_type(
-        0, static_cast<int>(modelKeys_.size()) - 1));
+    if (planningSteps_ <= 0 || prioritizedTransitions_.empty()) return;
 
-    for (int i = 0; i < planningSteps_; ++i)
+    for (int sweep = 0; sweep < planningSteps_ && !prioritizedTransitions_.empty(); ++sweep)
     {
-        // Sample a random previously-seen (state, action) pair.
-        int idx = keyDist_(randomEngine_);
-        const ModelKey&   key   = modelKeys_[idx];
-        const ModelValue& value = model_.at(key);
+        PrioritizedTransition top = prioritizedTransitions_.top();
+        prioritizedTransitions_.pop();
 
-        const Position& sampledPos    = key.first;
-        Action          sampledAction = key.second;
-        double          sampledReward = value.first;
-        const Position& sampledNext   = value.second;
+        if (auto modelIterator = model_.find(top.key); modelIterator == model_.end()) continue;
+        else
+        {
+            const Position&        sampledPosition = top.key.first;
+            Action                 sampledAction   = top.key.second;
+            const ModelTransition& transition      = modelIterator->second;
 
-        // Apply Bellman update using the imagined transition.
-        // Planning replays never carry terminal status — model doesn't store done.
-        updateQValue(sampledPos, sampledAction, sampledReward, sampledNext, false);
+            updateQValue(sampledPosition, sampledAction,
+                         transition.reward, transition.nextPosition,
+                         transition.terminalTransition);
+
+            for (const auto& [predecessorKey, predecessorTransition] : model_)
+            {
+                if (!(predecessorTransition.nextPosition == sampledPosition)) continue;
+                double predecessorError = computeBellmanError(
+                    predecessorKey.first,
+                    predecessorKey.second,
+                    predecessorTransition.reward,
+                    predecessorTransition.nextPosition,
+                    predecessorTransition.terminalTransition
+                );
+                if (predecessorError > priorityThreshold_)
+                    prioritizedTransitions_.push({predecessorError, predecessorKey});
+            }
+        }
     }
-
-    // CONCEPT — Why does this work?
-    //   The model stores deterministic transitions (last observed outcome for each
-    //   state-action pair). Replaying them is equivalent to re-experiencing those
-    //   moments — the Q-values converge faster because each real step triggers
-    //   planningSteps_ additional updates, not just one.
 }

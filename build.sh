@@ -22,8 +22,47 @@
 #   ./build.sh 16     — Phase 10: train Decision Transformer (offline, A* demonstrations)
 #   ./build.sh 17     — Phase 10: train Trajectory Diffuser (path generation via DDPM)
 #   ./build.sh 18     — Phase 10: benchmark all policies (MLP PPO vs Transformer PPO vs DT vs Diffuser)
+#   ./build.sh 21     — Train SAC (entropy-regularised, off-policy, twin critics)
+#   ./build.sh 22     — Train AlphaZero (MCTS + neural policy/value network)
+#   ./build.sh 23     — Train World Models (neural Dyna-Q, imagined rollouts)
+#   ./build.sh 24     — Train LSTM PPO (recurrent policy, partial observability)
+#   ./build.sh 26     — Deep RL benchmark (DQN vs SAC vs PPO vs LSTM, curriculum, 3 seeds)
+#   ./build.sh 27     — World Model generalization test (train on 1 maze, eval on 4)
 
 TARGET=${1:-2}
+
+# All .cpp files required by main.cpp (keep in sync with main.cpp compile comment)
+CPP_SOURCES=(
+    main.cpp
+    core/Position.cpp
+    core/Types.cpp
+    environment/Cell.cpp
+    environment/Environment.cpp
+    environment/DynamicEnvironment.cpp
+    environment/SensorModel.cpp
+    planning/algorithms/AStar.cpp
+    planning/algorithms/Dijkstra.cpp
+    planning/algorithms/BFS.cpp
+    planning/algorithms/BidirectionalAStar.cpp
+    planning/algorithms/ThetaStar.cpp
+    planning/algorithms/JPS.cpp
+    planning/algorithms/DStarLite.cpp
+    planning/algorithms/RRT.cpp
+    planning/algorithms/MCTS.cpp
+    planning/algorithms/CBS.cpp
+    rl/RLAgent.cpp
+    rl/QLearningAgent.cpp
+    rl/DynaQAgent.cpp
+    rl/TDLambdaAgent.cpp
+    rl/QTable.cpp
+    rl/RLEnvironment.cpp
+    planning/CurriculumScheduler.cpp
+    planning/hybrid/HeuristicNetwork.cpp
+    planning/hybrid/NeuralAStar.cpp
+    utils/ProbabilityUtils.cpp
+    visualization/Visualizer.cpp
+    tests/SmokeTests.cpp
+)
 
 if [ "$TARGET" = "clean" ]; then
     echo "==> Cleaning build artifacts..."
@@ -39,54 +78,14 @@ case $TARGET in
   1)
     echo "==> Building full binary with debug symbols..."
     set -e
-    g++ -std=c++17 -Wall -Wextra -g \
-        main.cpp \
-        core/Position.cpp core/Types.cpp \
-        environment/Cell.cpp environment/Environment.cpp \
-        environment/DynamicEnvironment.cpp environment/SensorModel.cpp \
-        planning/algorithms/AStar.cpp \
-        planning/algorithms/Dijkstra.cpp \
-        planning/algorithms/BFS.cpp \
-        planning/algorithms/BidirectionalAStar.cpp \
-        planning/algorithms/ThetaStar.cpp \
-        planning/algorithms/JPS.cpp \
-        planning/algorithms/DStarLite.cpp \
-        planning/algorithms/RRT.cpp \
-        planning/algorithms/MCTS.cpp \
-        planning/algorithms/CBS.cpp \
-        rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
-        rl/QTable.cpp rl/RLEnvironment.cpp \
-        planning/CurriculumScheduler.cpp \
-        utils/ProbabilityUtils.cpp \
-        visualization/Visualizer.cpp \
-        -o pathplanning_debug
+    g++ -std=c++17 -Wall -Wextra -g "${CPP_SOURCES[@]}" -o pathplanning_debug
     echo "Build OK → ./pathplanning_debug"
     ;;
 
   2)
     echo "==> Building full binary (all algorithms + tabular RL + dynamic env)..."
     set -e
-    g++ -std=c++17 -Wall -Wextra -O2 \
-        main.cpp \
-        core/Position.cpp core/Types.cpp \
-        environment/Cell.cpp environment/Environment.cpp \
-        environment/DynamicEnvironment.cpp environment/SensorModel.cpp \
-        planning/algorithms/AStar.cpp \
-        planning/algorithms/Dijkstra.cpp \
-        planning/algorithms/BFS.cpp \
-        planning/algorithms/BidirectionalAStar.cpp \
-        planning/algorithms/ThetaStar.cpp \
-        planning/algorithms/JPS.cpp \
-        planning/algorithms/DStarLite.cpp \
-        planning/algorithms/RRT.cpp \
-        planning/algorithms/MCTS.cpp \
-        planning/algorithms/CBS.cpp \
-        rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
-        rl/QTable.cpp rl/RLEnvironment.cpp \
-        planning/CurriculumScheduler.cpp \
-        utils/ProbabilityUtils.cpp \
-        visualization/Visualizer.cpp \
-        -o pathplanning
+    g++ -std=c++17 -Wall -Wextra -O2 "${CPP_SOURCES[@]}" -o pathplanning
     echo "Build OK → ./pathplanning"
     ;;
 
@@ -107,11 +106,8 @@ case $TARGET in
     ;;
 
   5)
-    echo "==> Plotting tabular RL training curves..."
-    # Requires: ./pathplanning run first (generates qlearning_training.csv, dynaq_training.csv)
-    set -e
-    source venv/bin/activate 2>/dev/null || true
-    python python/visualization/training_curves.py
+    echo "==> Target 5 removed (training_curves.py deleted)."
+    echo "    Training CSVs are written by ./pathplanning menu option 4."
     ;;
 
   6)
@@ -183,12 +179,8 @@ case $TARGET in
     ;;
 
   14)
-    echo "==> Phase 9: Heuristic quality visualisation..."
-    # Requires: ./build.sh 12 (weights.bin + weights.pt must exist)
-    # Output:   heuristic_quality.png  (scatter plot + node count comparison)
-    set -e
-    source venv/bin/activate 2>/dev/null || true
-    cd python && python visualization/heuristic_quality.py && cd ..
+    echo "==> Target 14 removed (heuristic_quality.py deleted)."
+    echo "    Use ./build.sh 13 to benchmark Neural A* vs standard A*."
     ;;
 
   15)
@@ -246,8 +238,76 @@ case $TARGET in
     python python/benchmark_all.py
     ;;
 
+  21)
+    echo "==> Training SAC (Soft Actor-Critic, entropy-regularised off-policy)..."
+    # Requires: ./build.sh 3 (pybind11 .so), pip install torch
+    # Output:   stdout training log (episode/reward/critic loss/actor loss/alpha)
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_sac.py
+    ;;
+
+  22)
+    echo "==> Training AlphaZero (MCTS + neural policy + value network)..."
+    # Requires: ./build.sh 3 (pybind11 .so), pip install torch
+    # Output:   stdout training log (episode/goal reached/example count)
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_alphazero.py
+    ;;
+
+  23)
+    echo "==> Training World Models (dynamics + reward networks, imagined rollouts)..."
+    # Requires: ./build.sh 3 (pybind11 .so), pip install torch
+    # Output:   stdout training log + evaluation success rate
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_world_model.py
+    ;;
+
+  25)
+    echo "==> Comparing Tabular Q-Learning vs DQN on the same maze..."
+    # Requires: ./build.sh 3 (pybind11 .so), pip install torch
+    # Output:   stdout comparison table (success rate, avg steps, param count)
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/benchmark_compare.py
+    ;;
+
+  24)
+    echo "==> Training LSTM PPO (recurrent policy for partial observability)..."
+    # Requires: ./build.sh 3 (pybind11 .so), pip install torch
+    # Output:   stdout training log (episode/total reward/loss)
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/train_lstm_ppo.py
+    ;;
+
+  26)
+    echo "==> Deep RL benchmark (DQN vs SAC vs PPO vs LSTM, curriculum, 3 seeds)..."
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/benchmark_deep_rl.py
+    ;;
+
+  27)
+    echo "==> World Model generalization test (train on 1 maze, eval on 4)..."
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/benchmark_world_model_gen.py
+    ;;
+
+  28)
+    echo "==> Python smoke tests (network shapes, agent construction, buffer ops)..."
+    # Requires: pip install torch — no pybind11 .so needed
+    # Runs in under 5 seconds. Use after any change to networks/ or agents/.
+    set -e
+    source venv/bin/activate 2>/dev/null || true
+    python python/tests/smoke_tests.py
+    ;;
+
   *)
-    echo "Unknown target '$TARGET'. Valid: 1–20"
+    echo "Unknown target '$TARGET'. Valid: 1–28"
     exit 1
     ;;
 

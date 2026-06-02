@@ -1,6 +1,7 @@
 // rl/RLEnvironment.cpp
 #include "RLEnvironment.h"
 #include <stdexcept>
+#include <cmath>
 
 // ---- Constructor ------------------------------------------------------------
 
@@ -30,13 +31,16 @@ StepResult RLEnvironment::step(Action action)
     
     if(env_.inBounds(candidatePosition) && !env_.isObstacle(candidatePosition))
     {
+        Position previousPosition = currentPosition_;
         currentPosition_ = candidatePosition;
         if (currentPosition_ == env_.getGoal())
-            return { currentPosition_, REWARD_GOAL, true  };
-        return { currentPosition_, REWARD_STEP, false };
+            return { currentPosition_, REWARD_GOAL, true };
+        double bonus = shapingBonus(previousPosition, currentPosition_);
+        return { currentPosition_, REWARD_STEP + bonus, false };
     }
 
-    return { currentPosition_, REWARD_WALL, false };
+    double wallBonus = shapingBonus(currentPosition_, currentPosition_);
+    return { currentPosition_, REWARD_WALL + wallBonus, false };
     // CONCEPT — Why stay put on a wall hit?
     //   In a real robot, colliding with a wall is not "teleporting back to start."
     //   The robot stays where it is but loses time and energy.
@@ -67,6 +71,43 @@ Position RLEnvironment::getGoal() const
 bool RLEnvironment::isValid(const Position& position) const
 {
     return env_.isValid(position);
+}
+
+// ---- Shaping ----------------------------------------------------------------
+
+void RLEnvironment::enableShaping(double discountFactor)
+{
+    if (discountFactor < 0.0 || discountFactor > 1.0)
+        throw std::invalid_argument("RLEnvironment::enableShaping — discountFactor must be in [0, 1]");
+    shapingEnabled_  = true;
+    shapingDiscount_ = discountFactor;
+}
+
+void RLEnvironment::disableShaping()
+{
+    shapingEnabled_ = false;
+}
+
+bool RLEnvironment::isShapingEnabled() const
+{
+    return shapingEnabled_;
+}
+
+double RLEnvironment::shapingBonus(const Position& fromPosition, const Position& toPosition) const
+{
+    if (!shapingEnabled_) return 0.0;
+
+    // No movement (wall hit) → no shaping. Potential-based shaping F(s,s') is
+    // defined for transitions; applying it to a no-op gives dist*(1-γ) > 0,
+    // which would partially cancel the wall penalty and distort learning.
+    if (fromPosition == toPosition) return 0.0;
+
+    Position goal = env_.getGoal();
+    double distFrom = std::abs(fromPosition.x - goal.x) + std::abs(fromPosition.y - goal.y);
+    double distTo   = std::abs(toPosition.x   - goal.x) + std::abs(toPosition.y   - goal.y);
+
+    // F(s, s') = γ·Φ(s') - Φ(s) = γ·(-distTo) - (-distFrom) = distFrom - γ·distTo
+    return distFrom - shapingDiscount_ * distTo;
 }
 
 // ---- Private helpers --------------------------------------------------------

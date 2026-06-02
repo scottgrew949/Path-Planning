@@ -56,10 +56,21 @@ struct NodeComparator
 };
 
 // ---- AStar ------------------------------------------------------------------
+//
+// CONCEPT — Weighted A* (ε-A*)
+//   Standard A* uses f(n) = g(n) + h(n). Weighted A* uses f(n) = g(n) + ε·h(n).
+//   ε = 1.0: identical to A* — optimal path guaranteed.
+//   ε > 1.0: heuristic is amplified — search is more greedy, expands fewer nodes,
+//            but the found path is guaranteed ≤ ε × optimal cost.
+//   This gives a formal, tunable optimality/speed tradeoff — not just a heuristic.
+//   Real-time robotics use case: obstacle detected, need a route in 5ms not 50ms;
+//   ε = 2.0 finds a route in a fraction of the time, guaranteed within 2× optimal.
 class AStar : public IPathfinder
 {
 public:
-    AStar() = default;
+    // epsilon = 1.0 → standard A* (default, backward compatible).
+    // epsilon > 1.0 → weighted A*. Throws if epsilon < 1.0.
+    explicit AStar(double epsilon = 1.0);
 
     std::vector<Position> findPath(
         const Environment& env,
@@ -69,10 +80,12 @@ public:
 
     std::string   getName() const override;
     AlgorithmType getType() const override;
-    int getNodesExplored() const override;
+    int           getNodesExplored() const override;
+    double        getEpsilon() const;
 
 private:
-    int nodesExplored_ = 0;
+    double epsilon_       = 1.0;
+    int    nodesExplored_ = 0;
     // Per-call state — cleared before each findPath() invocation.
     std::unordered_map<Position, double,   PositionHash> costFromStart_;
     std::unordered_map<Position, Position, PositionHash> arrivedFrom_;

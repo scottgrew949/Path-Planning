@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from replay_buffer import ReplayBuffer
 from dqn_network   import DQNNetwork
-from value_heatmap import plot_value_heatmap
+
 
 import torch
 import torch.nn as nn
@@ -55,6 +55,7 @@ EPSILON_START     = 1.0
 EPSILON_MIN       = 0.05
 EPSILON_DECAY     = 0.995
 TARGET_UPDATE_FREQ = 100     # copy main → target every N steps
+USE_DOUBLE_DQN    = True     # True: main selects action, target evaluates (recommended)
 
 # ---- Helpers ----------------------------------------------------------------
 
@@ -87,10 +88,26 @@ def compute_loss(batch,
     states, actions, rewards, next_states, dones = batch
     q_values = main_network(states)
     q_values = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+    # CONCEPT — Double DQN
+    #   Standard DQN uses the target network to both SELECT and EVALUATE the best
+    #   next action. The same network grading its own choices causes systematic
+    #   overestimation: it picks the action it rated highest, then confirms that
+    #   rating is high. Over training this inflates Q-values and destabilises learning.
+    #
+    #   Double DQN decouples the two questions:
+    #     1. Main network selects:  a* = argmax_a Q_main(s', a)
+    #     2. Target network scores: Q_target(s', a*)
+    #   The frozen target network gives an independent score for the action the
+    #   main network chose — overestimation bias drops significantly.
     with torch.no_grad():
-        best_actions  = main_network(next_states).argmax(1)
-        next_q_values = target_network(next_states).gather(1, best_actions.unsqueeze(1)).squeeze(1)
-    target = rewards + gamma * next_q_values * (1 - dones)
+        if USE_DOUBLE_DQN:
+            selected_actions   = main_network(next_states).argmax(1)
+            evaluated_q_values = target_network(next_states).gather(
+                1, selected_actions.unsqueeze(1)
+            ).squeeze(1)
+        else:
+            evaluated_q_values = target_network(next_states).max(1)[0]
+    target = rewards + gamma * evaluated_q_values * (1 - dones)
     return nn.MSELoss()(q_values, target)
 
 # ---- Training loop ----------------------------------------------------------
@@ -137,7 +154,6 @@ def train():
         if episode % 10 == 0 or episode <= 20:
             print(f"Episode {episode} | Reward: {episode_reward:.1f} | Epsilon: {epsilon:.3f}")
     
-    plot_value_heatmap(main_network, env, GRID_WIDTH, GRID_HEIGHT)
 
 
 if __name__ == "__main__":

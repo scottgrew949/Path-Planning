@@ -4,9 +4,7 @@
 
 // ---- Constructor ------------------------------------------------------------
 
-QTable::QTable(int width, int height)
-    : width_(width),
-      height_(height)
+QTable::QTable(int /*width*/, int /*height*/)
 {}
     // table_ is default-constructed as an empty unordered_map.
     // Q-values are implicitly 0.0 — getValue returns 0.0 for any unseen key.

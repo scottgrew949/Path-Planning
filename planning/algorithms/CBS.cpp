@@ -285,6 +285,8 @@ MultiAgentPaths CBS::findPaths(const Environment&        environment,
 
     while (!openCT.empty())
     {
+        if (maxCTNodes_ > 0 && nodesExpanded_ >= maxCTNodes_) return {};
+
         CBSNode current = openCT.top();
         openCT.pop();
         ++nodesExpanded_;

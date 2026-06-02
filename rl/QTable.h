@@ -74,9 +74,6 @@ public:
     void reset();
 
 private:
-    int width_;
-    int height_;
-
     // Flat map: Position → array of 4 Q-values (one per Action).
     // unordered_map chosen for O(1) average lookup — the agent calls getValue
     // and setValue on every single step of every episode.

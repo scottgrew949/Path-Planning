@@ -12,7 +12,13 @@ public:
         int stageIndex;
     };
 
+    // Equal stage lengths — divides totalEpisodes evenly across numStages.
     CurriculumScheduler(int totalEpisodes, int numStages = 4,
+                        double startDensity = 0.5, double endDensity = 0.1);
+
+    // Explicit stage lengths — each entry is the episode count for that stage.
+    // Density interpolates from startDensity to endDensity across stages.
+    CurriculumScheduler(const std::vector<int>& stageLengths,
                         double startDensity = 0.5, double endDensity = 0.1);
 
     double getDensityForEpisode(int episode) const;
@@ -24,6 +30,9 @@ public:
 
 private:
     std::vector<Stage> stages_;
+
+    void buildFromLengths(const std::vector<int>& stageLengths,
+                          double startDensity, double endDensity);
 };
 
 #endif  // CURRICULUMSCHEDULER_H

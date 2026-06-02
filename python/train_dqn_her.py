@@ -47,7 +47,6 @@ import pathplanning
 
 from replay_buffer import PrioritizedReplayBuffer
 from dqn_network   import DQNNetwork
-from value_heatmap import plot_value_heatmap
 
 # ---- Hyperparameters --------------------------------------------------------
 
@@ -215,8 +214,6 @@ def train():
                   f"| Epsilon: {epsilon:.3f} | Beta: {beta:.3f} "
                   f"| Buffer: {len(buffer)}")
 
-    plot_value_heatmap(main_network, env, GRID_WIDTH, GRID_HEIGHT,
-                       goal_x=GOAL_X, goal_y=GOAL_Y)
     print("Training complete.")
 
 

@@ -3,10 +3,9 @@
 #
 # Usage (from project root, with venv active):
 #   python setup.py build_ext --inplace
+#   — or from the menu: ./pathplanning → Build Python module
 #
-# This compiles bindings/pybind_module.cpp + all C++ source files into
-# a shared library called pathplanning.so (or pathplanning.cpython-312-darwin.so)
-# that Python can import directly.
+# Keep cpp_sources aligned with bindings/pybind_module.cpp includes.
 
 from setuptools import setup, Extension
 import pybind11
@@ -18,6 +17,7 @@ cpp_sources = [
     "environment/Cell.cpp",
     "environment/Environment.cpp",
     "environment/DynamicEnvironment.cpp",
+    "environment/SensorModel.cpp",
     "planning/algorithms/AStar.cpp",
     "planning/algorithms/Dijkstra.cpp",
     "planning/algorithms/BFS.cpp",
@@ -25,15 +25,16 @@ cpp_sources = [
     "planning/algorithms/ThetaStar.cpp",
     "planning/algorithms/JPS.cpp",
     "planning/algorithms/DStarLite.cpp",
+    "planning/algorithms/RRT.cpp",
     "planning/algorithms/CBS.cpp",
-    "environment/SensorModel.cpp",
+    "planning/hybrid/HeuristicNetwork.cpp",
+    "planning/hybrid/NeuralAStar.cpp",
     "rl/RLAgent.cpp",
     "rl/RLEnvironment.cpp",
     "rl/QTable.cpp",
     "rl/QLearningAgent.cpp",
+    "rl/DynaQAgent.cpp",
     "utils/ProbabilityUtils.cpp",
-    "planning/hybrid/HeuristicNetwork.cpp",
-    "planning/hybrid/NeuralAStar.cpp",
 ]
 
 extension = Extension(

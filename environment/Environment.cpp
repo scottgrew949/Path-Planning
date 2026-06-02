@@ -43,7 +43,7 @@ void Environment::clearObstacle(const Position& p)
 
 void Environment::setStart(const Position& p)
 {
-    if (inBounds(p) && !isObstacle(p))
+    if (inBounds(p) && !isObstacle(p) && p != goalPos_)
     {
         grid_[startPos_.x][startPos_.y].setCellType(CellType::EMPTY);
         grid_[p.x][p.y].setCellType(CellType::START);
@@ -53,7 +53,7 @@ void Environment::setStart(const Position& p)
 
 void Environment::setGoal(const Position& p)
 {
-    if (inBounds(p) && !isObstacle(p))
+    if (inBounds(p) && !isObstacle(p) && p != startPos_)
     {
         grid_[goalPos_.x][goalPos_.y].setCellType(CellType::EMPTY);
         grid_[p.x][p.y].setCellType(CellType::GOAL);

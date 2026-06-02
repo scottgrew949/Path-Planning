@@ -116,15 +116,14 @@ std::vector<Position> RLAgent::extractGreedyPath(int maxSteps) const
             {qTable_.getValue(currentPosition, Action::RIGHT), Action::RIGHT}
         }};
         std::sort(rankedActions.begin(), rankedActions.end(),
-                  [](const std::pair<double, Action>& firstPair,
-                     const std::pair<double, Action>& secondPair) {
-                      return firstPair.first > secondPair.first;
+                  [](const std::pair<double, Action>& a, const std::pair<double, Action>& b) {
+                      return a.first > b.first;
                   });
 
         bool movedThisStep = false;
-        for (const std::pair<double, Action>& rankedAction : rankedActions)
+        for (const auto& [qValue, action] : rankedActions)
         {
-            Position candidatePosition = stepInDirection(currentPosition, rankedAction.second);
+            Position candidatePosition = stepInDirection(currentPosition, action);
 
             if (candidatePosition == goal)
             {
