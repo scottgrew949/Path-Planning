@@ -4,11 +4,9 @@
 #define ASTAR_H
 
 #include <vector>
-#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
-#include <limits>
 #include "../../core/Position.h"
 #include "../../core/Types.h"
 #include "../../environment/Environment.h"

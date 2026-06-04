@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <array>
-#include <utility>
 
 // ---- TrainingResult constructors --------------------------------------------
 

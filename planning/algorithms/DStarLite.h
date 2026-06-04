@@ -15,8 +15,6 @@
 #include <queue>
 #include <unordered_map>
 #include <string>
-#include <limits>
-#include <utility>
 #include "../../core/Position.h"
 #include "../../core/Types.h"
 #include "../../environment/Environment.h"

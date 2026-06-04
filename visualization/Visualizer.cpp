@@ -1,5 +1,4 @@
 // visualization/Visualizer.cpp
-#include "../core/Types.h"
 #include "Visualizer.h"
 #include <iostream>
 #include <iomanip>

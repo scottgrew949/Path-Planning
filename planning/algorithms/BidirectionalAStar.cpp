@@ -1,7 +1,7 @@
 // planning/algorithms/BidirectionalAStar.cpp
 #include "BidirectionalAStar.h"
 #include <cmath>
-#include <limits>
+#include <queue>
 #include <algorithm>
 
 using namespace std;

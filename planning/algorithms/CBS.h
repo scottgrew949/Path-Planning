@@ -55,10 +55,7 @@
 #define CBS_H
 
 #include <vector>
-#include <unordered_map>
-#include <unordered_set>
-#include <queue>
-#include <set>
+#include <functional>
 #include "../../core/Position.h"
 #include "../../core/Types.h"
 #include "../../environment/Environment.h"

@@ -1,7 +1,7 @@
 // planning/algorithms/JPS.cpp
 #include "JPS.h"
-#include <cmath>
 #include <limits>
+#include <queue>
 
 using namespace std;
 

@@ -4,7 +4,6 @@
 #define POSITION_H
 
 #include <iostream>
-#include <functional>  // std::hash
 
 struct Position
 {

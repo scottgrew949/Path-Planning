@@ -1,6 +1,7 @@
 // planning/algorithms/ThetaStar.cpp
 #include "ThetaStar.h"
 #include <cmath>
+#include <queue>
 
 using namespace std;
 

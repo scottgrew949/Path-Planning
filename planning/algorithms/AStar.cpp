@@ -2,6 +2,7 @@
 #include "AStar.h"
 #include <cmath>
 #include <limits>
+#include <queue>
 
 using namespace std;
 

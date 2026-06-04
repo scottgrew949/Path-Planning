@@ -1,8 +1,6 @@
 // planning/hybrid/HeuristicNetwork.cpp
 #include "HeuristicNetwork.h"
 #include <fstream>
-#include <cmath>
-#include <stdexcept>
 #include <cstring>
 
 // ---- Layer ------------------------------------------------------------------

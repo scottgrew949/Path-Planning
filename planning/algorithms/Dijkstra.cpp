@@ -1,6 +1,7 @@
 // planning/algorithms/Dijkstra.cpp
 #include "Dijkstra.h"
 #include <limits>
+#include <queue>
 
 using namespace std;
 

@@ -1,8 +1,6 @@
 // environment/SensorModel.cpp
 #include "SensorModel.h"
 #include <stdexcept>
-#include <algorithm>
-#include <cstdlib>
 
 SensorModel::SensorModel(int sensorRange, double falsePositiveRate, double falseNegativeRate,
                          unsigned seed)

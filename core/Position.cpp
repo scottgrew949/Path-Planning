@@ -1,5 +1,6 @@
 // core/Position.cpp
 #include "Position.h"
+#include <functional>  // std::hash
 
 // ---- Position ---------------------------------------------------------------
 Position::Position(int xPos, int yPos) : x(xPos), y(yPos) {}
