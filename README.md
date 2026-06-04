@@ -1,159 +1,187 @@
-# Robot Path Planning System
+================================================================================
+  ROBOT PATH PLANNING & REINFORCEMENT LEARNING SYSTEM
+================================================================================
+  PROJECT OVERVIEW
+--------------------------------------------------------------------------------
 
-A ground-up C++ implementation of a robot navigation system bridging classical AI planning and modern reinforcement learning. Simulates the core software stack of an autonomous vehicle: perceiving an environment, planning a path through it, and learning from experience.
+A ground-up C++ implementation of a robot navigation system that bridges
+classical AI planning algorithms and modern reinforcement learning. The project
+simulates the core software stack of an autonomous vehicle or mobile robot:
+perceiving an environment, planning a path through it, and learning from
+experience to improve over time.
 
-Built entirely without external AI/ML libraries. Every algorithm, data structure, and learning mechanism implemented from scratch in production-quality C++17.
+WHAT IT DEMONSTRATES:
+  - Classical graph search: A* (weighted ε-A*), Dijkstra, BFS, Bidirectional A*,
+    Theta* (any-angle), JPS (jump point pruning), D* Lite (online replanning), RRT
+  - Multi-agent pathfinding: CBS (Conflict-Based Search, Space-Time A*), MCTS (UCT)
+  - Hierarchical planning: HPA*-lite — abstract tile search + local fine search
+  - Sensor fusion: log-odds occupancy grid, Kalman filter (pos+vel per obstacle)
+  - Tabular RL: Q-learning, TD(λ) eligibility traces, Dyna-Q (model-based)
+  - Deep RL: DQN, PPO, SAC, LSTM-PPO, AlphaZero via C++ environment + PyTorch bridge
+  - Imitation learning: Behavioural Cloning, DAgger
+  - Research-level: World Models, Transformer policy, Decision Transformer, Diffuser
+  - Clean systems architecture: abstract interfaces, polymorphism, pybind11 C++/Python bridge
 
----
+SELF-DRIVING CAR ANALOG:
+  Environment      = occupancy grid (what LiDAR produces)
+  Classical algos  = global route planner (Google Maps layer)
+  RL agent         = local motion policy (reacts to dynamic obstacles)
+  DQN              = neural net replacing the lookup table for large state spaces
 
-## What It Demonstrates
+--------------------------------------------------------------------------------
+  PHASE TASK LIST
+--------------------------------------------------------------------------------
 
-- **Classical graph search** — A\*, Dijkstra, BFS, Bidirectional A\*, Theta\* (any-angle), JPS (jump point search), D\* Lite (incremental replanning), RRT (random tree)
-- **Tabular RL from scratch** — Q-learning, Bellman equation, epsilon-greedy exploration, Dyna-Q model-based planning
-- **Deep RL** — DQN, Double DQN, Dueling DQN via C++ environment + PyTorch bridge
-- **Clean systems architecture** — abstract interfaces, polymorphism, separation of concerns, zero external AI dependencies in the C++ core
-- **Real-world relevance** — every component maps directly to autonomous vehicle technology
+PHASE 1 — C++ Classical Planning Foundation
+  [x] Position.h/.cpp
+  [x] Types.h/.cpp
+  [x] Cell.h/.cpp
+  [x] Environment.h/.cpp
+  [x] IPathfinder.h
+  [x] AStar.h/.cpp
+  [x] Dijkstra.h/.cpp
+  [x] BFS.h/.cpp
+  [x] BidirectionalAStar.h/.cpp
+  [x] ThetaStar.h/.cpp
+  [x] ProbabilityUtils.h/.cpp
+  [x] Visualizer.h/.cpp
+  [x] main.cpp
 
-### Self-Driving Car Analog
+PHASE 2 — Additional Classical Algorithms
+  [x] JPS.h/.cpp               — Jump Point Search, grid-optimised A*
+  [x] DStarLite.h/.cpp         — incremental replanning for dynamic obstacles
+  [x] RRT.h/.cpp               — Rapidly-exploring Random Tree for continuous space
+  [x] CBS.h/.cpp               — Conflict-Based Search, optimal multi-agent pathfinding
+  [x] MCTS.h/.cpp              — Monte Carlo Tree Search with UCT + transposition table
 
-| Component | AV Equivalent |
-|---|---|
-| Environment (occupancy grid) | What LiDAR produces |
-| Classical algorithms | Global route planner (Google Maps layer) |
-| RL agent | Local motion policy (reacts to dynamic obstacles) |
-| DQN | Neural net replacing lookup table for large state spaces |
-| Pi + Camera | Real-time perception pipeline feeding live obstacle data |
+PHASE 3 — Reinforcement Learning (C++, tabular)
+  [x] RLEnvironment.h/.cpp
+  [x] QTable.h/.cpp
+  [x] QLearningAgent.h/.cpp
+  [x] TDLambdaAgent.h/.cpp     — TD(λ) eligibility traces
+  [x] DynaQAgent.h/.cpp        — model-based RL, n simulated steps per real step
+  [x] Wire RL into main.cpp    — train agent, display learning curve, show greedy path
+  [x] Verify convergence       — agent reaches goal consistently after N episodes
 
----
+PHASE 4 — Deep RL: DQN (C++ environment + Python/PyTorch)
+  [x] pybind11 bridge          — expose RLEnvironment reset/step to Python
+  [x] ReplayBuffer             — circular buffer of (s,a,r,s') experience tuples
+  [x] DQN network              — fully connected net: position input, 4 Q-values out
+  [x] Target network           — frozen copy updated every N steps
+  [x] DQN training loop        — sample replay buffer, gradient descent on Bellman loss
+  [x] Double DQN               — decouple action selection from value estimation
+  [x] Dueling DQN              — value stream + advantage stream architecture
+  [x] DQN + HER                — Hindsight Experience Replay for sparse rewards
+  [x] PPO                      — proximal policy optimisation, actor-critic
+  [x] LSTM-PPO                 — recurrent policy for partial observability
+  [x] SAC                      — soft actor-critic, off-policy maximum entropy
+  [x] Training visualisation   — matplotlib reward curve, loss curve, path length
+  [x] Value heatmap            — Q-values overlaid on grid as colour map
 
-## Build
+PHASE 4b — Dyna-Q (model-based RL)
+  [x] EnvironmentModel         — agent's learned model: (s,a) to (s', reward)
+  [x] Dyna-Q training loop     — real step + N simulated planning steps per real step
+  [x] Benchmark vs tabular     — sample efficiency comparison
 
-All commands run from the project root.
+PHASE 5 — Policy Gradient: PPO / Actor-Critic
+  [x] Actor network            — outputs action probability distribution
+  [x] Critic network           — estimates state value V(s)
+  [x] Advantage estimation     — A(s,a) = Q(s,a) - V(s)
+  [x] PPO clipping             — stable policy update
+  [ ] Compare vs DQN
 
-```bash
-./build.sh        # full binary — planners + Q-Learning + Dyna-Q + TD(λ) (default)
-./build.sh 1      # full binary with debug symbols (-g)
-./build.sh 2      # full binary with -O2 (same sources as default)
-./build.sh 3      # Python .so binding via pybind11 (required before DQN)
-./build.sh 4      # DQN deep RL training (PyTorch)
-./build.sh 5      # tabular RL training curves (matplotlib)
-```
+PHASE 6 — Imitation Learning
+  [x] Expert demonstration     — A* generates optimal trajectory dataset
+  [x] Behavioural cloning      — supervised learning to mimic A* decisions
+  [x] DAgger                   — iterative imitation with expert queries
+  [x] Benchmark vs random init
 
-Run the interactive driver (one binary, all C++ and Python entry points):
-```bash
-./build.sh 2
-./pathplanning
-```
+PHASE 7 — Curriculum Learning + Benchmarking
+  [x] Curriculum scheduler     — easy mazes first, increase difficulty over training
+  [x] Statistical benchmark    — 1000 random seeds, mean path length, success rate
+  [x] benchmark_plot.py        — bar chart comparing all algorithms
+  [x] Classical vs RL analysis
 
-### Main menu
+PHASE 8 — Dynamic Obstacles + Partial Observability
+  [x] DynamicEnvironment       — obstacles that move each timestep
+  [x] SensorModel              — agent sees only within radius R
+  [x] D* Lite integration      — replan each frame
+  [x] RL local policy          — handle dynamic agents classical planner cannot predict
 
-| Key | Action |
-|-----|--------|
-| `1` | C++ demos (classical, CBS, Bayes, tabular RL, dynamic+RL, TD-λ, Neural A*) |
-| `2` | Python training scripts (heuristic net, DQN, PPO, …) |
-| `3` | Python benchmarks and plots |
-| `S` | Smoke tests — fast regression checks (~seconds) |
-| `G` | Golden path — quick end-to-end C++ tour (uses QUICK profile for RL) |
-| `A` | Run all C++ demos in sequence |
-| `B` | Build Python module (`./build.sh 3`) |
-| `T` | Toggle **FULL** / **QUICK** training (15k vs 1k curriculum episodes) |
-| `0` | Exit |
+PHASE 9 — Neural A* (Hybrid Classical-RL)
+  [x] Learned heuristic        — neural net replaces Manhattan distance
+  [x] Train on maze dataset
+  [x] Benchmark vs standard A*
 
-**FULL** vs **QUICK** applies to tabular RL sections (menu 4, 5, 6, and option A). Classical planning is unchanged.
+PHASE 8b — Dynamic Obstacles + Sensor Fusion + Kalman Tracking
+  [x] DynamicEnvironment       — cyclic moving obstacles, tick()
+  [x] SensorModel              — range-limited noisy sensor (false positive/negative rates)
+  [x] Log-odds belief grid     — additive sensor fusion, numerically stable
+  [x] KalmanTracker            — linear KF tracking pos+vel per obstacle
+  [x] D* Lite integration      — replan each tick as obstacles move
 
-**Neural A*** (C++ menu 7) needs `python/data/weights.bin` from Python Training → generate data → train heuristic (or `./build.sh 11`–`12`). The same weights are used by Python benchmarks via `./build.sh 3`.
+PHASE 9b — Hierarchical Planning
+  [x] AbstractMap              — N×N tile abstraction over Environment
+  [x] HierarchicalPlanner      — two-phase HPA*-lite: abstract search + local A*
+  [x] Kalman → planner wiring  — predicted obstacle tiles blocked before abstract search
 
----
+================================================================================
+MVP FINISHED (Phases 1–9b)
+================================================================================
 
-## Algorithms
+PHASE 10 — Attention-Based Policy
+  [x] Grid encoder             — CNN patch embedding
+  [x] Transformer policy       — self-attention over grid state
+  [x] Decision Transformer     — RL as sequence prediction, no Bellman required
+  [x] Diffuser                 — diffusion model generates full trajectories
+  [x] World Model              — DreamerV3-style latent model + planning inside it
+  [x] AlphaZero                — MCTS + neural value/policy, self-play training
 
-### Classical Pathfinding
+PHASE 11 — Hardware Integration (Raspberry Pi + Camera)
+  [ ] Overhead camera setup
+  [ ] Obstacle detection       — OpenCV colour detection or ArUco markers
+  [ ] Live grid update         — detected obstacles feed into env.setObstacle()
+  [ ] Real-time demo           — agent navigates grid mirroring physical world
+  [ ] Visualisation overlay    — agent position + Q-values on camera feed
 
-| Algorithm | Strategy | Optimal? | Notes |
-|---|---|---|---|
-| A\* | Best-first + heuristic | Yes | Manhattan distance heuristic |
-| Dijkstra | Uniform cost | Yes | No directional bias |
-| BFS | Hop count | Unweighted | Ignores edge costs |
-| Bidirectional A\* | Meets in the middle | Yes | ~3.5x fewer nodes than A\* |
-| Theta\* | Any-angle A\* | Near-optimal | Line-of-sight shortcuts via Bresenham |
-| JPS | Jump point search | Yes | Skips symmetric corridor paths |
-| D\* Lite | Backward A\* | Yes | Incremental replan on obstacle change |
-| RRT | Random tree | No | Probabilistic, continuous-space capable |
+PHASE 12 — OpenStreetMap Integration
+  [ ] OSM graph import         — libosmium: intersections as nodes, roads as edges
+  [ ] Coordinate projection    — lat/lon to x/y
+  [ ] Dynamic edge weights     — real-time traffic data
+  [ ] Run A*/Dijkstra on map
 
-### Tabular RL (C++)
+--------------------------------------------------------------------------------
+  COMPILE COMMANDS  (build.sh — run from project root)
+--------------------------------------------------------------------------------
 
-| Agent | Method | Notes |
-|---|---|---|
-| Q-Learning | Temporal difference | 1 Bellman update per real step |
-| Dyna-Q | Model-based TD | n=10 imagined updates per real step, ~10x faster convergence |
+  ./build.sh 1   — Classical pathfinding only (no RL, fastest compile)
+                   Output: ./pathplanning_classical
 
-### Deep RL (Python + PyTorch)
+  ./build.sh 2   — Full C++ binary: all 8 algorithms + Q-Learning + Dyna-Q
+  ./build.sh     — (same as above, default target)
+                   Output: ./pathplanning
+                   Writes: qlearning_training.csv, dynaq_training.csv
 
-- DQN with replay buffer and target network
-- Double DQN (decoupled action selection / value estimation)
-- Dueling DQN (value stream + advantage stream)
-- PPO / Actor-Critic (in progress)
+  ./build.sh 3   — Python .so binding via pybind11 (required before 4)
+                   Requires: pip install pybind11
 
----
+  ./build.sh 4   — DQN deep RL training (Double DQN + Dueling DQN)
+                   Requires: build.sh 3 done, pip install torch
+                   Runtime: ~30–45 min CPU
 
-## Architecture
+  ./build.sh 5   — Tabular RL training curves (matplotlib)
+                   Requires: pathplanning run first (generates CSVs)
+                   Output: training_curves.png
 
-```
-core/               Position, Types, enums
-environment/        Occupancy grid (dual: vector<Cell> + bitset<10000>)
-planning/
-  IPathfinder.h     Abstract interface — all 8 algorithms polymorphic
-  algorithms/       AStar, Dijkstra, BFS, BidirectionalAStar, ThetaStar,
-                    JPS, DStarLite, RRT
-rl/
-  RLAgent           Abstract base (mirrors IPathfinder)
-  QLearningAgent    Tabular Q-learning
-  DynaQAgent        Model-based RL with world model
-  RLEnvironment     Gym-style wrapper (reset / step)
-  QTable            State-action value store
-utils/              ProbabilityUtils (Bayesian sensor fusion, entropy)
-visualization/      Grid and path rendering, summary table
-python/             DQN, Dueling DQN, Double DQN, Actor-Critic, PPO
-```
+  ./build.sh 6   — Behavioral Cloning training (imitation learning)
+                   Requires: build.sh 3 done, pip install torch
+                   Output: bc_model.pth
 
----
+  ./build.sh 7   — DAgger training (iterative imitation learning)
+                   Requires: build.sh 3 done, pip install torch
+                   Output: dagger_model.pth
 
-## Output
+  ./build.sh 8   — Imitation learning benchmark (Random vs BC vs DAgger vs Expert)
+                   Requires: build.sh 6 and 7 done
 
-Running `./pathplanning`:
-
-1. **Environment** — 201×41 labyrinth grid rendered to terminal
-2. **Pathfinding** — all 8 algorithms run, path overlaid on grid, stats printed
-3. **Algorithm comparison table** — path length, cost, time, nodes explored
-4. **Bayesian sensor fusion** — occupancy grid update demo
-5. **Q-Learning training** — 10k episodes, convergence table, greedy path
-6. **Dyna-Q training** — 10k episodes, convergence table, greedy path
-7. **CSV output** — `qlearning_training.csv`, `dynaq_training.csv` for plotting
-
-Plot training curves after running:
-```bash
-./build.sh 5
-```
-
----
-
-## Hardware Extension (Planned)
-
-Raspberry Pi + overhead camera feeds live obstacle detection into `env.setObstacle()`. RL agent navigates a physical grid mirroring the real world in real time.
-
----
-
-## Roadmap
-
-- [x] Phase 1 — Classical planning (A\*, Dijkstra, BFS, Bidirectional A\*, Theta\*)
-- [x] Phase 2 — Additional algorithms (JPS, D\* Lite, RRT)
-- [x] Phase 3 — Tabular RL (Q-Learning, Dyna-Q)
-- [x] Phase 4 — Deep RL (DQN, Double DQN, Dueling DQN)
-- [ ] Phase 5 — Policy gradient (PPO / Actor-Critic)
-- [ ] Phase 6 — Imitation learning (behavioural cloning, DAgger)
-- [ ] Phase 7 — Curriculum learning + statistical benchmarking
-- [ ] Phase 8 — Dynamic obstacles + partial observability
-- [ ] Phase 9 — Neural A\* (learned heuristic)
-- [ ] Phase 10 — Attention-based policy (Transformer, Decision Transformer)
-- [ ] Phase 11 — Hardware integration (Raspberry Pi + camera)
-- [ ] Phase 12 — OpenStreetMap integration
+================================================================================
