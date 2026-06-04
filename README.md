@@ -151,37 +151,28 @@ PHASE 12 — OpenStreetMap Integration
   [ ] Run A*/Dijkstra on map
 
 --------------------------------------------------------------------------------
-  COMPILE COMMANDS  (build.sh — run from project root)
+  BUILD COMMANDS  (./build.sh — run from project root)
 --------------------------------------------------------------------------------
 
-  ./build.sh 1   — Classical pathfinding only (no RL, fastest compile)
-                   Output: ./pathplanning_classical
+  ./build.sh              — full C++ binary             → ./pathplanning
+  ./build.sh debug        — debug binary (-g)           → ./pathplanning_debug
+  ./build.sh py           — pybind11 .so  (required before all Python targets)
 
-  ./build.sh 2   — Full C++ binary: all 8 algorithms + Q-Learning + Dyna-Q
-  ./build.sh     — (same as above, default target)
-                   Output: ./pathplanning
-                   Writes: qlearning_training.csv, dynaq_training.csv
+  TRAINING  (all require: ./build.sh py  +  pip install torch)
+  ./build.sh dqn          — DQN + Double + Dueling + HER
+  ./build.sh sac          — Soft Actor-Critic
+  ./build.sh ppo          — PPO + LSTM-PPO (partial observability)
+  ./build.sh alphazero    — AlphaZero (MCTS + neural value/policy)
+  ./build.sh world        — World Model (dynamics net + imagined rollouts)
+  ./build.sh bc           — Behavioural Cloning         → bc_model.pth
+  ./build.sh dagger       — DAgger                      → dagger_model.pth
+  ./build.sh heuristic    — generate data + train net   → weights.bin
+  ./build.sh attention    — Transformer + Decision Transformer + Diffuser
 
-  ./build.sh 3   — Python .so binding via pybind11 (required before 4)
-                   Requires: pip install pybind11
+  ./build.sh bench        — all benchmarks (requires relevant models trained)
+  ./build.sh clean        — remove binaries and .so
 
-  ./build.sh 4   — DQN deep RL training (Double DQN + Dueling DQN)
-                   Requires: build.sh 3 done, pip install torch
-                   Runtime: ~30–45 min CPU
-
-  ./build.sh 5   — Tabular RL training curves (matplotlib)
-                   Requires: pathplanning run first (generates CSVs)
-                   Output: training_curves.png
-
-  ./build.sh 6   — Behavioral Cloning training (imitation learning)
-                   Requires: build.sh 3 done, pip install torch
-                   Output: bc_model.pth
-
-  ./build.sh 7   — DAgger training (iterative imitation learning)
-                   Requires: build.sh 3 done, pip install torch
-                   Output: dagger_model.pth
-
-  ./build.sh 8   — Imitation learning benchmark (Random vs BC vs DAgger vs Expert)
-                   Requires: build.sh 6 and 7 done
+  TYPICAL SESSION:
+  ./build.sh && ./build.sh py && ./build.sh heuristic && ./build.sh dqn && ./build.sh bench
 
 ================================================================================
