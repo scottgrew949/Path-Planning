@@ -23,6 +23,8 @@
 //       rl/QTable.cpp rl/RLEnvironment.cpp rl/TDLambdaAgent.cpp \
 //       planning/CurriculumScheduler.cpp \
 //       planning/hybrid/HeuristicNetwork.cpp planning/hybrid/NeuralAStar.cpp \
+//       planning/hierarchical/AbstractMap.cpp planning/hierarchical/HierarchicalPlanner.cpp \
+//       environment/KalmanTracker.cpp \
 //       utils/ProbabilityUtils.cpp visualization/Visualizer.cpp \
 //       tests/SmokeTests.cpp \
 //       -o pathplanning
@@ -35,6 +37,9 @@
 #include <string>
 #include <cstdlib>
 #include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <random>
 
 #include "core/Position.h"
 #include "core/Types.h"
@@ -60,6 +65,8 @@
 #include "environment/SensorModel.h"
 #include "rl/TDLambdaAgent.h"
 #include "planning/hybrid/NeuralAStar.h"
+#include "planning/hierarchical/HierarchicalPlanner.h"
+#include "environment/KalmanTracker.h"
 #include "core/RunProfile.h"
 #include "tests/SmokeTests.h"
 
@@ -192,6 +199,7 @@ static vector<PathResult> sectionAlgorithms(Environment& env)
     algos.push_back(make_unique<DStarLite>());
     algos.push_back(make_unique<RRT>());
     algos.push_back(make_unique<MCTS>(2000, 1.414, 300));
+    algos.push_back(make_unique<HierarchicalPlanner>(4));
 
     vector<PathResult> results;
     for (unique_ptr<IPathfinder>& algo : algos)
@@ -586,6 +594,134 @@ static void sectionNeuralAStar()
     cout << "  heuristic calls: " << neuralAstar.getHeuristicCallCount() << "\n";
 }
 
+static void sectionKalmanTracker()
+{
+    Visualizer::printSection("Kalman Filter — Moving Obstacle Tracking");
+    cout << "The Kalman filter maintains a position + velocity estimate per moving obstacle.\n";
+    cout << "Each tick: predict() projects state forward using the motion model;\n";
+    cout << "update() corrects the estimate with a noisy sensor measurement.\n\n";
+    cout << "Self-driving analog: every ADAS system predicts where nearby vehicles\n";
+    cout << "will be in 0.5 seconds so the planner can route around them proactively.\n\n";
+    cout << "  True pos    = ground truth from DynamicEnvironment (not visible to planner)\n";
+    cout << "  Noisy meas  = position + Gaussian noise (what the sensor actually reports)\n";
+    cout << "  Kalman est  = filter's best estimate after fusing motion model + measurements\n";
+    cout << "  Error       = Euclidean distance from Kalman estimate to true position\n\n";
+    cout << "Watch: error shrinks as the filter learns each obstacle's velocity.\n";
+    cout << "The estimate should beat the raw measurement within a few ticks.\n\n";
+
+    DynamicEnvironment dynEnv(20, 10);
+    dynEnv.setStart(Position(0, 0));
+    dynEnv.setGoal(Position(19, 9));
+
+    std::vector<Position> horizontalPatrol;
+    for (int x =  3; x <= 16; ++x) horizontalPatrol.push_back(Position(x, 3));
+    for (int x = 15; x >=  4; --x) horizontalPatrol.push_back(Position(x, 3));
+    dynEnv.addDynamicObstacle(horizontalPatrol, 1);
+
+    std::vector<Position> verticalPatrol;
+    for (int y = 1; y <= 8; ++y) verticalPatrol.push_back(Position(10, y));
+    for (int y = 7; y >= 2; --y) verticalPatrol.push_back(Position(10, y));
+    dynEnv.addDynamicObstacle(verticalPatrol, 1);
+
+    const double measurementNoise = 1.5;
+    const double processNoise     = 0.5;
+
+    KalmanTracker tracker(processNoise, measurementNoise);
+
+    std::vector<Position> startPositions = dynEnv.getCurrentObstaclePositions();
+    for (int obstacleIndex = 0; obstacleIndex < (int)startPositions.size(); ++obstacleIndex)
+        tracker.initObstacle(obstacleIndex,
+                             static_cast<double>(startPositions[obstacleIndex].x),
+                             static_cast<double>(startPositions[obstacleIndex].y));
+
+    std::mt19937 rng(42);
+    std::normal_distribution<double> sensorNoise(0.0, measurementNoise);
+
+    const int totalTicks = 12;
+
+    cout << "Tick | Obs | True pos  | Noisy meas      | Kalman est | Error\n";
+    cout << "-----|-----|-----------|-----------------|------------|------\n";
+
+    for (int tick = 1; tick <= totalTicks; ++tick)
+    {
+        dynEnv.tick();
+        std::vector<Position> truePositions = dynEnv.getCurrentObstaclePositions();
+
+        tracker.predict(1.0);
+
+        for (int obstacleIndex = 0; obstacleIndex < (int)truePositions.size(); ++obstacleIndex)
+        {
+            double noisyX = truePositions[obstacleIndex].x + sensorNoise(rng);
+            double noisyY = truePositions[obstacleIndex].y + sensorNoise(rng);
+
+            tracker.update(obstacleIndex, noisyX, noisyY);
+
+            Position estimated = tracker.getEstimatedPosition(obstacleIndex);
+            double errorX      = estimated.x - truePositions[obstacleIndex].x;
+            double errorY      = estimated.y - truePositions[obstacleIndex].y;
+            double error       = std::sqrt(errorX * errorX + errorY * errorY);
+
+            cout << "  " << setw(3) << tick
+                 << " |  " << obstacleIndex
+                 << "  | (" << setw(2) << truePositions[obstacleIndex].x
+                 << "," << setw(2) << truePositions[obstacleIndex].y << ")"
+                 << "   | (" << fixed << setprecision(1) << setw(5) << noisyX
+                 << "," << setw(5) << noisyY << ")"
+                 << "  | (" << setw(2) << estimated.x
+                 << "," << setw(2) << estimated.y << ")"
+                 << "       | " << fixed << setprecision(2) << error << "\n";
+        }
+        if (tick < totalTicks)
+            cout << "     |     |           |                 |            |\n";
+    }
+
+    cout << "\n";
+    cout << "Predicted positions 2 ticks ahead:\n";
+    std::vector<Position> predictions  = tracker.getPredictedObstaclePositions(2.0);
+    std::vector<Position> currentTruth = dynEnv.getCurrentObstaclePositions();
+    for (int i = 0; i < (int)predictions.size(); ++i)
+        cout << "  Obstacle " << i
+             << ": current (" << currentTruth[i].x << "," << currentTruth[i].y << ")"
+             << "  predicted in 2 ticks (" << predictions[i].x << "," << predictions[i].y << ")\n";
+
+    // ---- Kalman → HierarchicalPlanner integration ---------------------------
+    Visualizer::printSection("Kalman → Hierarchical Planner");
+    cout << "HierarchicalPlanner with Kalman tracker attached routes around predicted\n";
+    cout << "obstacle positions — the planner avoids where obstacles will be, not just\n";
+    cout << "where they are now. This is proactive replanning vs reactive replanning.\n\n";
+    cout << "Same environment as the Kalman tracking demo above — walls create a\n";
+    cout << "bottleneck that the obstacles patrol through. Without predictions the planner\n";
+    cout << "picks the shortest path through that bottleneck. With predictions it detours.\n\n";
+
+    // Use dynEnv — it has walls that funnel the path through the obstacle patrol area.
+    // reset() clears visited/path overlays but keeps obstacles, start, goal.
+    dynEnv.reset();
+
+    HierarchicalPlanner plannerWithoutKalman(3);
+    PathResult withoutKalman = runTimed(plannerWithoutKalman, dynEnv,
+                                        dynEnv.getStart(), dynEnv.getGoal());
+    cout << "Without Kalman: ";
+    Visualizer::displayStats(withoutKalman.algorithmName, withoutKalman.path,
+                             withoutKalman.elapsedMs, withoutKalman.pathCost);
+
+    HierarchicalPlanner plannerWithKalman(3);
+    plannerWithKalman.setKalmanTracker(&tracker, 2.0);
+    PathResult withKalman = runTimed(plannerWithKalman, dynEnv,
+                                     dynEnv.getStart(), dynEnv.getGoal());
+    cout << "With Kalman:    ";
+    Visualizer::displayStats(withKalman.algorithmName, withKalman.path,
+                             withKalman.elapsedMs, withKalman.pathCost);
+
+    int pathDiff = (int)withKalman.path.size() - (int)withoutKalman.path.size();
+    if (pathDiff > 0)
+        cout << "\nPath is " << pathDiff << " steps longer — Kalman predictions blocked"
+             << " tiles on the short route, forcing a detour.\n";
+    else if (pathDiff == 0)
+        cout << "\nSame length — predicted obstacles not on the critical path at this tick.\n";
+    else
+        cout << "\nKalman path shorter — predictions cleared a blocked region.\n";
+}
+
 static void sectionDynamicObstacles(RunProfile profile)
 {
     Visualizer::printSection("Dynamic Obstacles + Partial Observability");
@@ -725,6 +861,7 @@ static void runAllCppDemos(RunProfile profile)
     sectionBayesian(results);
     vector<pair<string,int>> rlSummary = sectionTabularRL(env, profile);
     sectionDynamicObstacles(profile);
+    sectionKalmanTracker();
     sectionNeuralAStar();
 
     Visualizer::printSection("Full System Comparison");
@@ -782,6 +919,7 @@ static void menuCppDemos()
         cout << "  5. Dynamic Obstacles + Sensors + RL\n";
         cout << "  6. TD-λ Eligibility Traces\n";
         cout << "  7. Neural A* (requires python/data/weights.bin)\n";
+        cout << "  8. Kalman Filter — Moving Obstacle Tracking\n";
         cout << "  0. Back\n";
         cout << "\nChoice: ";
         if (!(cin >> input)) break;
@@ -793,6 +931,7 @@ static void menuCppDemos()
         else if (input == "5") { sectionDynamicObstacles(gRunProfile); }
         else if (input == "6") { sectionTDLambda(gRunProfile); }
         else if (input == "7") { sectionNeuralAStar(); }
+        else if (input == "8") { sectionKalmanTracker(); }
         else if (input == "0") { break; }
         else { cout << "Unknown option.\n"; }
     }

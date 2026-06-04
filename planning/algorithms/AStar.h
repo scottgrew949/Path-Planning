@@ -1,26 +1,5 @@
 // planning/algorithms/AStar.h
 // A* search — optimal when heuristic is admissible (never overestimates).
-//
-// STL highlights:
-//   priority_queue<AStarNode, vector<AStarNode>, NodeComparator>
-//       – min-heap ordered by fCost = gCost + h(pos, goal)
-//   unordered_map<Position, double,   PositionHash>  – O(1) gScore lookup
-//   unordered_map<Position, Position, PositionHash>  – O(1) parent tracking
-//
-// Algorithm sketch (for implementation reference):
-//   1. Push {start, g=0, f=h(start,goal)} onto openSet.
-//   2. gScore[start] = 0; all others implicitly +∞.
-//   3. Loop until openSet empty:
-//        current = openSet.top(); openSet.pop()
-//        if current.pos == goal: return reconstructPath(goal)
-//        for each neighbour n of current.pos:
-//          tentative_g = gScore[current.pos] + moveCost(current, n)
-//          if tentative_g < gScore[n] (or n not yet in gScore):
-//            cameFrom[n]  = current.pos
-//            gScore[n]    = tentative_g
-//            fScore[n]    = tentative_g + heuristic(n, goal)
-//            push {n, gScore[n], fScore[n]} onto openSet
-//   4. Return {} (no path).
 #ifndef ASTAR_H
 #define ASTAR_H
 
@@ -35,9 +14,7 @@
 #include "../../environment/Environment.h"
 #include "../IPathfinder.h"
 
-// ---- AStarNode --------------------------------------------------------------
 // Lightweight value type pushed onto the priority_queue.
-// Stores a copy of pos to avoid pointer invalidation.
 struct AStarNode
 {
     Position    pos;
@@ -46,25 +23,13 @@ struct AStarNode
     double      totalEstimatedCost;     // gCost + h(pos, goal); drives heap ordering
 };
 
-// ---- NodeComparator ---------------------------------------------------------
 // Makes priority_queue a min-heap on fCost (lower fCost = higher priority).
-// Passed as the third template argument to std::priority_queue.
 struct NodeComparator
 {
     // Returns true when 'a' should be popped AFTER 'b' (i.e. a has lower priority).
     bool operator()(const AStarNode& a, const AStarNode& b) const;
 };
 
-// ---- AStar ------------------------------------------------------------------
-//
-// CONCEPT — Weighted A* (ε-A*)
-//   Standard A* uses f(n) = g(n) + h(n). Weighted A* uses f(n) = g(n) + ε·h(n).
-//   ε = 1.0: identical to A* — optimal path guaranteed.
-//   ε > 1.0: heuristic is amplified — search is more greedy, expands fewer nodes,
-//            but the found path is guaranteed ≤ ε × optimal cost.
-//   This gives a formal, tunable optimality/speed tradeoff — not just a heuristic.
-//   Real-time robotics use case: obstacle detected, need a route in 5ms not 50ms;
-//   ε = 2.0 finds a route in a fraction of the time, guaranteed within 2× optimal.
 class AStar : public IPathfinder
 {
 public:
@@ -101,4 +66,4 @@ private:
     double costFromStartTo(const Position& p) const;
 };
 
-#endif  // ASTAR_H
+#endif

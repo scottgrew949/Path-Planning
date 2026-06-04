@@ -119,17 +119,7 @@ void Environment::resetBeliefs(double logOddsPrior)
     fill(cellLogOdds_.begin(), cellLogOdds_.end(), logOddsPrior);
 }
 
-// ---- File I/O ---------------------------------------------------------------
-
-// Wait until later to implement saved map loading
-void Environment::loadFromFile([[maybe_unused]] const string& filename)
-{
-    // TODO: open filename with ifstream; throw runtime_error if open fails
-    // TODO: read line by line; each char maps to a CellType:
-    //         '.' -> EMPTY, '#' -> OBSTACLE, 'S' -> START, 'G' -> GOAL
-    // TODO: call setObstacle / setStart / setGoal for each special cell
-    // TODO: validate parsed dimensions match width_ and height_
-}
+// ---- Map Generator ----------------------------------------------------------
 
 void Environment::generateLabyrinth(double loopDensity, unsigned seed)
 {
@@ -182,7 +172,6 @@ void Environment::generateLabyrinth(double loopDensity, unsigned seed)
 }
 
 // Simpler less random sprinkling of obstacles
-// Status: UNUSED
 void Environment::generateRandom(double obstacleDensity)
 {
     generateRandom(obstacleDensity, random_device{}());

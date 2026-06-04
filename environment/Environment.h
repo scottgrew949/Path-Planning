@@ -1,7 +1,6 @@
 // environment/Environment.h
 // High-level grid environment for robot path planning.
-//
-// STL highlights used here:
+// STL Components:
 //   vector<vector<Cell>>              – 2D grid storage
 //   unordered_set<Position,PositionHash> – O(1) visited lookup
 //   bitset<MAX_CELLS>                 – compact, O(1) obstacle membership
@@ -16,25 +15,16 @@
 #include "../core/Types.h"
 #include "Cell.h"
 
-// Maximum supported grid size (width * height must not exceed this).
-// Sized for 100×100; increase for larger experiments.
+// Maximum supported grid size: 100×100
 constexpr int MAX_CELLS = 10000;
 
 class Environment
 {
 public:
     // ---- Construction & initialisation ------------------------------------
-
-    // width = number of columns (x-axis), height = number of rows (y-axis)
     Environment(int width, int height);
 
-    // Populate from a plain-text file.
-    // Format: each row is a string of chars, using Cell::toChar() convention:
-    //   '.' = EMPTY, '#' = OBSTACLE, 'S' = START, 'G' = GOAL
-    void loadFromFile(const std::string& filename);
-
     // Fill obstacles randomly; obstacleDensity in [0.0, 1.0].
-    // Uses std::mt19937 seeded from std::random_device.
     void generateRandom(double obstacleDensity);
     void generateRandom(double obstacleDensity, unsigned seed);   // seeded overload for reproducible mazes
     void generateLabyrinth(double loopDensity, unsigned seed = 0);
@@ -64,9 +54,7 @@ public:
     //   to [LOG_ODDS_MIN, LOG_ODDS_MAX] to prevent saturation lock-in.
     //   getBeliefAt() converts back to probability for external callers and
     //   visualization — internal storage always in log-odds space.
-    //
-    //   This mirrors ROS costmap_2d and every production occupancy grid system.
-
+    
     static constexpr double LOG_ODDS_MIN   = -20.0;   // clamp floor (~p ≈ 2e-9)
     static constexpr double LOG_ODDS_MAX   =  20.0;   // clamp ceiling (~p ≈ 1 - 2e-9)
     static constexpr double LOG_ODDS_PRIOR = -2.197;  // log(0.1/0.9) — 10% prior
@@ -76,7 +64,6 @@ public:
                       double truePositiveRate, double falsePositiveRate);
 
     // Return P(occupied) in [0,1] for cell (x, y). Converts from log-odds.
-    // Returns 0.0 if out of bounds.
     double getBeliefAt(int x, int y) const;
 
     // Return raw log-odds for cell (x, y). Returns LOG_ODDS_MIN if out of bounds.
@@ -107,10 +94,7 @@ public:
     int                                   getHeight() const;
     const std::vector<std::vector<Cell>>& getGrid()   const;
 
-    // Count of cells currently marked as VISITED.
     int visitedCount() const;
-
-    // Count of obstacles currently set.
     int obstacleCount() const;
 
 private:
@@ -125,7 +109,6 @@ private:
     std::unordered_set<Position, PositionHash> visited_;
 
     // Bit-parallel obstacle index — mirrors grid_ obstacle state.
-    // Bit i = 1 means the cell at toIndex(x,y) is an obstacle.
     std::bitset<MAX_CELLS> obstacleBits_;
 
     // Log-odds occupancy grid — one double per cell in [LOG_ODDS_MIN, LOG_ODDS_MAX].
@@ -135,12 +118,12 @@ private:
     Position startPos_;
     Position goalPos_;
 
-    // Flatten (x, y) → single index for obstacleBits_.
+    // Flatten (x, y) -> single index for obstacleBits_.
     int  toIndex(int x, int y)        const;
     int  toIndex(const Position& p)   const;
 
-    // Internal helpers that keep grid_ and obstacleBits_ in sync.
+    // Keeps grid_ and obstacleBits_ in sync.
     void syncObstacleBit(const Position& p, bool set);
 };
 
-#endif  // ENVIRONMENT_H
+#endif 

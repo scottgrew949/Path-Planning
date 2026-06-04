@@ -2,7 +2,6 @@
 #include "Position.h"
 
 // ---- Position ---------------------------------------------------------------
-
 Position::Position(int xPos, int yPos) : x(xPos), y(yPos) {}
 
 bool Position::operator==(const Position& other) const
@@ -21,13 +20,6 @@ bool Position::operator<(const Position& other) const
         return this->y < other.y;
 
     return this->x < other.x;
-
-    /*
-    Why (y, x) and not (x, y)?
-    Grid data is stored row-by-row. Sorting by y first groups positions into 
-    rows, which matches memory layout and is more intuitive when iterating 
-    top-to-bottom.
-    */
 }
 
 void Position::print() const
@@ -42,7 +34,6 @@ std::ostream& operator<<(std::ostream& os, const Position& p)
 }
 
 // ---- PositionHash -----------------------------------------------------------
-
 std::size_t PositionHash::operator()(const Position& position) const noexcept
 {
     // XOR-shift combine: shift y's hash left 16 bits before XOR to reduce

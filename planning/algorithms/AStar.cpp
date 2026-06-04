@@ -5,14 +5,10 @@
 
 using namespace std;
 
-// ---- NodeComparator ---------------------------------------------------------
-
 bool NodeComparator::operator()(const AStarNode& a, const AStarNode& b) const
 {
     return a.totalEstimatedCost > b.totalEstimatedCost;
 }
-
-// ---- AStar ------------------------------------------------------------------
 
 AStar::AStar(double epsilon)
     : epsilon_(epsilon)

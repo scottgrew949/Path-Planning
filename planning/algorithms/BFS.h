@@ -1,25 +1,7 @@
 // planning/algorithms/BFS.h
 // Breadth-First Search — guarantees shortest path in hop count (unweighted graph).
-//
-// BFS expands nodes in FIFO order, so the first time the goal is reached it
-// must have been reached via the fewest hops (not necessarily lowest cost).
 // On a uniform-cost grid BFS and Dijkstra return identical paths, but BFS
 // is faster because it avoids the heap overhead.
-//
-// STL highlights:
-//   queue<Position>                              – FIFO expansion order
-//   unordered_set<Position,   PositionHash>      – O(1) visited check
-//   unordered_map<Position, Position, PositionHash> – parent tracking
-//
-// Algorithm sketch:
-//   1. Enqueue start; mark start visited.
-//   2. Loop until queue empty:
-//        current = front(); pop()
-//        if current == goal: return reconstructPath(goal, start)
-//        for each neighbour n of current:
-//          if not visited[n]:
-//            mark n visited; parent[n] = current; enqueue n
-//   3. Return {}.
 #ifndef BFS_H
 #define BFS_H
 
@@ -57,4 +39,4 @@ private:
     void clearState();
 };
 
-#endif  // BFS_H
+#endif 

@@ -6,10 +6,6 @@
 #include <iostream>
 #include <functional>  // std::hash
 
-// ---- Position ---------------------------------------------------------------
-// Plain struct (no heap ownership) so copy/move semantics are trivially correct.
-// operator== is required by unordered_set / unordered_map.
-// operator<  is required by set / map / priority_queue tie-breaking.
 struct Position
 {
     int x;   // column index (0 = left)
@@ -35,4 +31,4 @@ struct PositionHash
     std::size_t operator()(const Position& position) const noexcept;
 };
 
-#endif  // POSITION_H
+#endif

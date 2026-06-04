@@ -9,10 +9,6 @@
 //
 // Limitation: most effective on open grids. In dense mazes the benefit
 // shrinks because jump points are closer together.
-//
-// STL highlights:
-//   Same priority_queue structure as A*
-//   unordered_map for costFromStart, arrivedFrom
 #ifndef JPS_H
 #define JPS_H
 
@@ -27,7 +23,6 @@
 #include "../../environment/Environment.h"
 #include "../IPathfinder.h"
 
-// ---- JPSNode ----------------------------------------------------------------
 struct JPSNode
 {
     Position pos;
@@ -36,13 +31,11 @@ struct JPSNode
     double   totalEstimatedCost;
 };
 
-// ---- JPSComparator ----------------------------------------------------------
 struct JPSComparator
 {
     bool operator()(const JPSNode& a, const JPSNode& b) const;
 };
 
-// ---- JPS --------------------------------------------------------------------
 class JPS : public IPathfinder
 {
 public:
@@ -82,4 +75,4 @@ private:
                   const Position&    goal)                              const;
 };
 
-#endif  // JPS_H
+#endif

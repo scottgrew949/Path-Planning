@@ -6,15 +6,11 @@
 
 using namespace std;
 
-// ---- BidirectionalComparator ------------------------------------------------
-
 bool BidirectionalComparator::operator()(const BidirectionalNode& a,
                                          const BidirectionalNode& b) const
 {
     return a.totalEstimatedCost > b.totalEstimatedCost;
 }
-
-// ---- BidirectionalAStar -----------------------------------------------------
 
 string BidirectionalAStar::getName() const
 {

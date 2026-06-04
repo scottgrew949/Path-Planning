@@ -4,15 +4,11 @@
 
 using namespace std;
 
-// ---- ThetaStarComparator ----------------------------------------------------
-
 bool ThetaStarComparator::operator()(const ThetaStarNode& a,
                                       const ThetaStarNode& b) const
 {
     return a.totalEstimatedCost > b.totalEstimatedCost;
 }
-
-// ---- ThetaStar --------------------------------------------------------------
 
 string ThetaStar::getName() const
 {

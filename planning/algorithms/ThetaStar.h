@@ -1,17 +1,10 @@
 // planning/algorithms/ThetaStar.h
 // Theta* — any-angle path planning. Extension of A* that allows paths to
-// travel in any direction rather than being constrained to grid edges.
+//      travel in any direction rather than being constrained to grid edges.
 //
 // Key difference from A*: when relaxing a neighbour, checks if there is a
 // direct line of sight from the neighbour's grandparent. If so, shortcuts
 // the path by connecting directly, producing smoother, shorter paths.
-//
-// Self-driving car analog: produces natural-looking curved routes rather
-// than the staircase paths that grid-constrained A* generates.
-//
-// STL highlights:
-//   Same priority_queue structure as A*
-//   unordered_map for costFromStart, arrivedFrom
 #ifndef THETA_STAR_H
 #define THETA_STAR_H
 
@@ -26,7 +19,6 @@
 #include "../../environment/Environment.h"
 #include "../IPathfinder.h"
 
-// ---- ThetaStarNode ----------------------------------------------------------
 struct ThetaStarNode
 {
     Position pos;
@@ -35,13 +27,11 @@ struct ThetaStarNode
     double   totalEstimatedCost;
 };
 
-// ---- ThetaStarComparator ----------------------------------------------------
 struct ThetaStarComparator
 {
     bool operator()(const ThetaStarNode& nodeA, const ThetaStarNode& nodeB) const;
 };
 
-// ---- ThetaStar --------------------------------------------------------------
 class ThetaStar : public IPathfinder
 {
 public:
@@ -65,12 +55,12 @@ private:
     int nodesExplored_ = 0;
 
     void   clearState();
-    double heuristicDistance(const Position& from, const Position& to)       const;
-    double euclideanDistance(const Position& from, const Position& to)        const;
+    double heuristicDistance(const Position& from, const Position& to)      const;
+    double euclideanDistance(const Position& from, const Position& to)      const;
     bool   hasLineOfSight(const Environment& env,
                           const Position&    from,
                           const Position&    to)                            const;
-    double costFromStartTo(const Position& position)                             const;
+    double costFromStartTo(const Position& position)                        const;
 };
 
-#endif  // THETA_STAR_H
+#endif

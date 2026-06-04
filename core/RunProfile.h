@@ -3,8 +3,8 @@
 #ifndef RUN_PROFILE_H
 #define RUN_PROFILE_H
 
-// FULL  — curriculum training (15k episodes total across stages).
-// QUICK — shortened runs for menu iteration and smoke-style demos.
+// FULL  — curriculum training.
+// QUICK — shortened runs for menu iteration and demos.
 enum class RunProfile
 {
     FULL,
@@ -21,7 +21,8 @@ inline const int* curriculumStageLengths(RunProfile profile)
 
 inline int curriculumStageCount()
 {
-    return 4;
+    return 4;   //Progressive difficulty
+    //Front loads east tests and back loads harder tests: 2500, 2500, 5000, 5000
 }
 
 inline int totalCurriculumEpisodes(RunProfile profile)

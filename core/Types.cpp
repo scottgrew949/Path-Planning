@@ -2,8 +2,6 @@
 #include "Types.h"
 #include "Position.h"
 
-// ---- PathResult -------------------------------------------------------------
-
 PathResult::PathResult()
     : algorithm(AlgorithmType::ASTAR),
       algorithmName(""),
@@ -13,8 +11,6 @@ PathResult::PathResult()
 {
     // path is default-constructed as an empty vector<Position>
 }
-
-// ---- StepResult -------------------------------------------------------------
 
 StepResult::StepResult()
     : newPosition(0, 0),

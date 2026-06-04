@@ -7,7 +7,6 @@
 #include <vector>
 #include "Position.h"
 
-// ---- CellType ---------------------------------------------------------------
 enum class CellType
 {
     EMPTY,
@@ -19,8 +18,6 @@ enum class CellType
 
 };
 
-// ---- AlgorithmType ----------------------------------------------------------
-// Used to select or label which pathfinder is running.
 enum class AlgorithmType
 {
     ASTAR,
@@ -31,14 +28,14 @@ enum class AlgorithmType
     THETA_STAR,
     JPS,
     RRT,
-    NEURAL_ASTAR, // learned heuristic — planning/hybrid/NeuralAStar
-    CBS,          // Conflict-Based Search — multi-agent pathfinding
-    MCTS          // Monte Carlo Tree Search — simulation-based planning
+    NEURAL_ASTAR,       // learned heuristic — planning/hybrid/NeuralAStar
+    CBS,                // Conflict-Based Search — multi-agent pathfinding
+    MCTS,               // Monte Carlo Tree Search — simulation-based planning
+    HIERARCHICAL_ASTAR  // two-phase: abstract tile search + local fine search
 };
 
-// ---- PathResult -------------------------------------------------------------
 // Returned by each algorithm run; bundles outcome with diagnostics.
-// All data members are value types — safe to copy / store in STL containers.
+// All data members are value types
 struct PathResult
 {
     AlgorithmType   algorithm;
@@ -52,7 +49,6 @@ struct PathResult
 };
 
 // ---- Multi-agent types (CBS) ------------------------------------------------
-
 // A single agent defined by its start and goal positions.
 struct Agent
 {
@@ -86,7 +82,7 @@ struct EdgeConstraint
     int      timestep   = 0;
 };
 
-// A conflict between two agents detected in the CBS high-level search.
+// A conflict between two agents detected in the CBS high-level search. 
 struct Conflict
 {
     enum class Type { VERTEX, EDGE };
@@ -100,16 +96,11 @@ struct Conflict
 
 // Result of a CBS solve: one time-stamped path per agent.
 // Index: paths[agentIndex][timestep] = Position.
-// Shorter paths are padded with the goal position (agent waits at goal).
 using MultiAgentPaths = std::vector<std::vector<Position>>;
 
 // ---- Action -----------------------------------------------------------------
 // The four moves the RL agent can take from any grid cell.
-// Stored as int values so they can index directly into the QTable's
 // array<double,4> — one slot per action per cell.
-//
-// Self-driving analog: these are the robot's available controls —
-// move forward, back, turn left, turn right.
 enum class Action
 {
     UP    = 0,
@@ -119,22 +110,18 @@ enum class Action
 };
 
 // ---- StepResult -------------------------------------------------------------
-// Returned by RLEnvironment::step() after the agent takes one action.
 // Bundles everything the agent needs to learn from that single move:
 //   - where it ended up
 //   - how good or bad that move was (reward)
 //   - whether the episode is over (done)
-//
-// This mirrors the OpenAI Gym interface used in Python RL research —
-// same concept, C++ implementation.
 struct StepResult
 {
     Position newPosition;   // cell the agent is now in after the action
     double   reward;        // immediate reward signal for this move
     bool     done;          // true when episode ends (goal reached)
 
-    StepResult();           // zero-initialise numeric fields
+    StepResult();
     StepResult(Position newPosition, double reward, bool done);
 };
 
-#endif  // TYPES_H
+#endif

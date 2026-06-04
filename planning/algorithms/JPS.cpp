@@ -5,18 +5,12 @@
 
 using namespace std;
 
-// ---- Local helpers ----------------------------------------------------------
-
 static int sign(int n) { return (n > 0) ? 1 : (n < 0) ? -1 : 0; }
-
-// ---- JPSComparator ----------------------------------------------------------
 
 bool JPSComparator::operator()(const JPSNode& a, const JPSNode& b) const
 {
     return a.totalEstimatedCost > b.totalEstimatedCost;
 }
-
-// ---- JPS --------------------------------------------------------------------
 
 string JPS::getName() const
 {

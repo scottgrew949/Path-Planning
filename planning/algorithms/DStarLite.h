@@ -3,18 +3,11 @@
 // efficiently repairs it when obstacles appear or disappear without
 // restarting from scratch.
 //
-// Self-driving car analog: replans the route each frame as the OAK-D camera
-// detects new obstacles and feeds them into the occupancy grid.
-//
 // Key concepts:
 //   g(s)   — current best cost estimate from s to goal
 //   rhs(s) — one-step lookahead cost (more stable than g)
 //   A node is locally consistent when g(s) == rhs(s)
 //   Inconsistent nodes are queued for processing
-//
-// STL highlights:
-//   priority_queue with pair<double,double> keys — main open list
-//   unordered_map<Position, double, PositionHash>  — g and rhs tables
 #ifndef DSTAR_LITE_H
 #define DSTAR_LITE_H
 
@@ -29,7 +22,6 @@
 #include "../../environment/Environment.h"
 #include "../IPathfinder.h"
 
-// ---- DStarKey ---------------------------------------------------------------
 // Priority key is a pair — primary sort on first, secondary on second.
 struct DStarKey
 {
@@ -39,20 +31,17 @@ struct DStarKey
     bool operator>(const DStarKey& other) const;
 };
 
-// ---- DStarNode --------------------------------------------------------------
 struct DStarNode
 {
     Position pos;
     DStarKey key;
 };
 
-// ---- DStarComparator --------------------------------------------------------
 struct DStarComparator
 {
     bool operator()(const DStarNode& a, const DStarNode& b) const;
 };
 
-// ---- DStarLite --------------------------------------------------------------
 class DStarLite : public IPathfinder
 {
 public:
@@ -90,4 +79,4 @@ private:
                         DStarComparator> openList_;
 };
 
-#endif  // DSTAR_LITE_H
+#endif

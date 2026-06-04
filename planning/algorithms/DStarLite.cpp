@@ -11,21 +11,15 @@ static bool keyEqual(const DStarKey& a, const DStarKey& b)
     return a.primary == b.primary && a.secondary == b.secondary;
 }
 
-// ---- DStarKey ---------------------------------------------------------------
-
 bool DStarKey::operator>(const DStarKey& other) const
 {
     return primary > other.primary || (primary == other.primary && secondary > other.secondary);
 }
 
-// ---- DStarComparator --------------------------------------------------------
-
 bool DStarComparator::operator()(const DStarNode& a, const DStarNode& b) const
 {
     return a.key > b.key;
 }
-
-// ---- DStarLite --------------------------------------------------------------
 
 string DStarLite::getName() const
 {

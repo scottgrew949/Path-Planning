@@ -1,0 +1,2231 @@
+diff --git a/environment/Environment.cpp b/environment/Environment.cpp
+index bb16407d..be3d365a 100644
+--- a/environment/Environment.cpp
++++ b/environment/Environment.cpp
+@@ -43,7 +43,7 @@ void Environment::clearObstacle(const Position& p)
+ 
+ void Environment::setStart(const Position& p)
+ {
+-    if (inBounds(p) && !isObstacle(p))
++    if (inBounds(p) && !isObstacle(p) && p != goalPos_)
+     {
+         grid_[startPos_.x][startPos_.y].setCellType(CellType::EMPTY);
+         grid_[p.x][p.y].setCellType(CellType::START);
+@@ -53,7 +53,7 @@ void Environment::setStart(const Position& p)
+ 
+ void Environment::setGoal(const Position& p)
+ {
+-    if (inBounds(p) && !isObstacle(p))
++    if (inBounds(p) && !isObstacle(p) && p != startPos_)
+     {
+         grid_[goalPos_.x][goalPos_.y].setCellType(CellType::EMPTY);
+         grid_[p.x][p.y].setCellType(CellType::GOAL);
+diff --git a/main.cpp b/main.cpp
+index 1d9f0241..f8b53f92 100644
+--- a/main.cpp
++++ b/main.cpp
+@@ -1,5 +1,5 @@
+ // main.cpp
+-// Robot Path Planning System — demonstration driver.
++// Robot Path Planning System — interactive menu driver.
+ //
+ // Compile (g++ C++17, macOS / Linux):
+ //   g++ -std=c++17 -Wall -Wextra -O2 \
+@@ -15,6 +15,8 @@
+ //       planning/algorithms/JPS.cpp \
+ //       planning/algorithms/DStarLite.cpp \
+ //       planning/algorithms/RRT.cpp \
++//       planning/algorithms/MCTS.cpp \
++//       planning/algorithms/CBS.cpp \
+ //       rl/RLAgent.cpp rl/QLearningAgent.cpp rl/DynaQAgent.cpp \
+ //       rl/QTable.cpp rl/RLEnvironment.cpp \
+ //       planning/CurriculumScheduler.cpp \
+@@ -28,6 +30,8 @@
+ #include <memory>
+ #include <chrono>
+ #include <string>
++#include <numeric>
++#include <cstdlib>
+ 
+ #include "core/Position.h"
+ #include "core/Types.h"
+@@ -54,7 +58,10 @@
+ 
+ using namespace std;
+ 
+-// ---- Helper: time a single algorithm run ------------------------------------
++// =============================================================================
++// Shared helpers
++// =============================================================================
++
+ static PathResult runTimed(IPathfinder&       algo,
+                             const Environment& env,
+                             const Position&    start,
+@@ -81,33 +88,39 @@ static PathResult runTimed(IPathfinder&       algo,
+     return result;
+ }
+ 
+-// ---- Helper: build a 151x41 labyrinth scenario ------------------------------
+ static Environment buildScenario()
+ {
+     Environment env(201, 41);
+     env.setStart(Position(0, 0));
+     env.setGoal(Position(200, 40));
+     env.generateLabyrinth(0.4);
+-
+     return env;
+ }
+ 
+-// =============================================================================
+-int main()
++static void runPythonScript(const string& relPath)
+ {
+-    // =========================================================================
+-    // Section 1: Environment setup
+-    // =========================================================================
+-    Visualizer::printSection("Environment Setup");
++    string command = "venv/bin/python3 python/" + relPath;
++    cout << "\nRunning: " << command << "\n\n";
++    std::system(command.c_str());
++}
+ 
+-    Environment env = buildScenario();
++// =============================================================================
++// Demo sections — each is self-contained
++// =============================================================================
+ 
+-    // =========================================================================
+-    // Section 2: Run all algorithms via IPathfinder interface
+-    // =========================================================================
+-    Visualizer::printSection("Pathfinding Algorithms");
+-    AStar astar;
+-    PathResult r = runTimed(astar, env, env.getStart(), env.getGoal());
++// Returns results so runAllCppDemos() can pass them to the summary.
++static vector<PathResult> sectionAlgorithms(Environment& env)
++{
++    Visualizer::printSection("Classical Pathfinding Algorithms");
++    cout << "All 9 algorithms run on the same 201x41 labyrinth from corner to corner.\n";
++    cout << "They know the full map upfront — this is called 'complete information' planning.\n";
++    cout << "Self-driving analog: offline route planning before the car moves.\n\n";
++    cout << "What to notice: A* and Dijkstra find the shortest path but explore many cells.\n";
++    cout << "JPS and Theta* skip redundant cells — same quality, less work.\n";
++    cout << "RRT* and MCTS are probabilistic — they explore randomly, so paths vary each run.\n\n";
++    cout << "  length  = number of steps in the returned path\n";
++    cout << "  cost    = total movement cost (straight moves cost 1.0, turns add a small penalty)\n";
++    cout << "  time    = wall-clock milliseconds the algorithm took to find the path\n\n";
+ 
+     vector<unique_ptr<IPathfinder>> algos;
+     algos.push_back(make_unique<AStar>());
+@@ -129,102 +142,141 @@ int main()
+         Visualizer::displayStats(r.algorithmName, r.path, r.elapsedMs, r.pathCost);
+     }
+ 
+-    // =========================================================================
+-    // Section 3: Algorithm comparison table
+-    // =========================================================================
+     Visualizer::printSection("Algorithm Comparison");
+-
++    cout << "The key insight: nodes explored measures search intelligence, not just speed.\n";
++    cout << "A* uses a heuristic (estimated distance to goal) to ignore dead-end directions early.\n";
++    cout << "Dijkstra has no heuristic — it fans out in all directions equally, exploring more.\n";
++    cout << "BFS treats all moves as equal cost — finds fewest steps but ignores turn penalties.\n";
++    cout << "JPS prunes symmetric paths (why explore 10 cells in a corridor when 1 jump covers them?).\n";
++    cout << "Theta* allows any-angle paths — cuts corners Dijkstra/A* can't because they're grid-locked.\n";
++    cout << "RRT*/MCTS are stochastic — path quality varies, but they scale to continuous spaces.\n\n";
++    cout << "  nodes explored = cells examined before finding the path — fewer = smarter algorithm\n\n";
+     Visualizer::displaySummaryTable(results);
+ 
+-    // =========================================================================
+-    // Section 3b: Multi-Agent Pathfinding (CBS)
+-    // =========================================================================
+-    Visualizer::printSection("Multi-Agent Pathfinding (CBS)");
++    return results;
++}
+ 
++static void sectionCBS()
++{
++    Visualizer::printSection("Multi-Agent Pathfinding (CBS)");
++    cout << "3 robots navigate their own routes through a shared open grid without colliding.\n";
++    cout << "CBS plans individually first, then detects conflicts and adds constraints until\n";
++    cout << "all paths are collision-free. Agents have genuinely different distances to travel\n";
++    cout << "so their path lengths should differ — longer routes take more steps.\n";
++    cout << "Self-driving analog: intersection management for a fleet of autonomous vehicles.\n\n";
++    cout << "  path length = steps each robot takes to reach its individual goal\n";
++    cout << "  total cost  = sum of all path lengths — the fleet efficiency metric\n";
++    cout << "  CT nodes    = conflict-resolution attempts made (grows exponentially with agent count)\n\n";
++
++    // Purpose-built 30x20 grid with sparse random obstacles — gives CBS agents
++    // multiple genuine route options so paths reflect actual distance differences.
++    Environment cbsEnv(30, 20);
++    cbsEnv.setStart(Position(0, 0));
++    cbsEnv.setGoal(Position(29, 19));
++    cbsEnv.generateRandom(0.15, 42);   // fixed seed: reproducible, low density for open routes
++
++    std::vector<Agent> agents = {
++        Agent(Position( 0,  0), Position(29, 19)),   // long diagonal
++        Agent(Position( 0, 10), Position(29, 10)),   // straight across middle
++        Agent(Position( 0, 19), Position(29,  0))    // diagonal the other way
++    };
++
++    CBS cbs;
++    MultiAgentPaths agentPaths = cbs.findPaths(cbsEnv, agents);
++
++    cout << "Agents: " << agents.size() << "\n";
++    if (agentPaths.empty())
+     {
+-        // Three agents on the same labyrinth — non-overlapping start/goal pairs.
+-        // Agents are spaced apart so the initial individual paths are likely
+-        // conflict-free or require only a small number of CT node expansions.
+-        std::vector<Agent> agents = {
+-            Agent(Position(0,  0), Position(10, 10)),
+-            Agent(Position(0,  5), Position(10,  5)),
+-            Agent(Position(0, 10), Position(10,  0))
+-        };
+-
+-        CBS cbs;
+-        MultiAgentPaths agentPaths = cbs.findPaths(env, agents);
+-
+-        cout << "Agents: " << agents.size() << "\n";
+-        if (agentPaths.empty())
+-        {
+-            cout << "No solution found within search budget.\n";
+-        }
+-        else
++        cout << "No solution found within search budget.\n";
++    }
++    else
++    {
++        int totalCost = 0;
++        for (size_t agentIndex = 0; agentIndex < agentPaths.size(); ++agentIndex)
+         {
+-            int totalCost = 0;
+-            for (size_t agentIndex = 0; agentIndex < agentPaths.size(); ++agentIndex)
+-            {
+-                int pathLength = static_cast<int>(agentPaths[agentIndex].size());
+-                totalCost += pathLength;
+-                cout << "  Agent " << agentIndex << " path length: " << pathLength << " steps\n";
+-            }
+-            cout << "Total cost (sum of path lengths): " << totalCost << "\n";
+-            cout << "CT nodes expanded: " << cbs.getNodesExpanded() << "\n";
++            int pathLength = static_cast<int>(agentPaths[agentIndex].size());
++            totalCost += pathLength;
++            cout << "  Agent " << agentIndex << " path length: " << pathLength << " steps\n";
+         }
++        cout << "Total cost (sum of path lengths): " << totalCost << "\n";
++        cout << "CT nodes expanded: " << cbs.getNodesExpanded() << "\n";
+     }
++}
+ 
+-    // =========================================================================
+-    // Section 4: Probability — sensor fusion demo
+-    // =========================================================================
++// results may be empty when called standalone — fallback to example costs.
++static void sectionBayesian(const vector<PathResult>& results)
++{
+     Visualizer::printSection("Sensor Uncertainty (Bayesian)");
++    cout << "Classical planning assumes the map is perfectly known. Real robots don't have that luxury.\n";
++    cout << "Bayes' rule is how a robot updates its belief about the world when a sensor fires.\n";
++    cout << "If a LiDAR reports an obstacle (sensor hit), how confident should we be it's really there?\n";
++    cout << "That depends on: how often was an obstacle there before (prior), how reliable is the sensor\n";
++    cout << "(true positive rate), and how often does it false-alarm (false positive rate).\n";
++    cout << "This math sits inside every occupancy grid in every autonomous vehicle on the road.\n\n";
++    cout << "  prior       = probability of obstacle before the sensor fires (our initial belief)\n";
++    cout << "  posterior   = updated probability after the sensor reports a hit\n";
++    cout << "  expected cost = probability-weighted average of all possible path costs\n";
++    cout << "  entropy     = information content of the route choice — 0 bits means one obvious answer\n\n";
+ 
+-    // demonstrate bayesUpdateSensor:
+     double posterior = ProbabilityUtils::bayesUpdateSensor(0.2, 0.9, 0.1, true);
+-    cout << "Prior: 0.20 → Posterior after sensor hit: " << posterior << '\n';
+-    //       This is the core of occupancy grid updating in real autonomous vehicles.
++    cout << "Prior: 0.20  →  Posterior after sensor hit: " << posterior << '\n';
+ 
+-    // demonstrate expectedValue with path costs:
+     vector<double> costs;
+-    for (const PathResult& res : results) costs.push_back(res.pathCost);
+-    vector<double> probs(costs.size(), 1.0 / costs.size());
++    if (!results.empty())
++        for (const PathResult& res : results) costs.push_back(res.pathCost);
++    else
++        costs = {120.0, 135.0, 200.0, 145.0, 160.0};
++
++    vector<double> probs(costs.size(), 1.0 / static_cast<double>(costs.size()));
+     double ev = ProbabilityUtils::expectedValue(costs, probs);
+     cout << "Expected path cost: " << ev << '\n';
+ 
+-    // demonstrate entropy:
+-    vector<double> uniform(costs.size(), 1.0 / costs.size());
+-    cout << "Route entropy (5 equal options): "
+-        << ProbabilityUtils::entropy(uniform) << " bits\n";
++    vector<double> uniform = probs;
++    cout << "Route entropy (" << costs.size() << " equal options): "
++         << ProbabilityUtils::entropy(uniform) << " bits\n";
++}
++
++// Returns rl summary so runAllCppDemos() can pass it to displayFinalSummary.
++static vector<pair<string,int>> sectionTabularRL(Environment& env)
++{
++    // Easy stages get 2500 episodes — enough to learn a simple maze.
++    // Harder stages get 5000 — the agent needs more attempts to adapt.
++    const std::vector<int> stageLengths = {2500, 2500, 5000, 5000};
++    const int numEpisodes = static_cast<int>(
++        std::accumulate(stageLengths.begin(), stageLengths.end(), 0));
+ 
+-    // =========================================================================
+-    // Section 5: Reinforcement Learning — tabular Q-learning
+-    // =========================================================================
+     Visualizer::printSection("Reinforcement Learning (Tabular Q-Learning)");
++    cout << "The agent gets NO map. It starts knowing nothing and learns purely from consequences.\n";
++    cout << "Runs " << numEpisodes << " episodes. Snapshot every 1000.\n";
++    cout << "Every move returns a reward signal: +100 for reaching the goal, -1 per valid step,\n";
++    cout << "-10 for hitting a wall. Over thousands of episodes the agent builds a Q-table:\n";
++    cout << "a lookup table of 'at position X, action Y is worth Z expected future reward.'\n";
++    cout << "Early episodes: the agent wanders randomly. Late episodes: it follows a learned path.\n";
++    cout << "Self-driving analog: a robot that learns to navigate a building without being programmed.\n\n";
++    cout << "What to watch: the curriculum scheduler replaces the maze mid-training with a harder one.\n";
++    cout << "This causes visible regressions — the agent was learning one maze, then the floor moves.\n";
++    cout << "Steps spike upward and Goal Reached can flip back to NO after the maze changes.\n";
++    cout << "This is intentional: curriculum learning exposes the agent to progressively harder mazes\n";
++    cout << "so the final policy generalises rather than memorising a single layout.\n";
++    cout << "Epsilon decays to 0.05 early and stays there — exploration is mostly off by episode 1000.\n\n";
++    cout << "  Episode      = one full run start-to-goal (or timeout at max steps)\n";
++    cout << "  Goal Reached = did the agent find the goal this episode?\n";
++    cout << "  Steps        = moves made — high early (wandering), lower as policy improves\n";
++    cout << "  Total Reward = sum of all rewards — negative early, rises toward 0 as agent improves\n";
++    cout << "  Epsilon      = exploration rate: 1.0 = pure random, 0.05 = 95% learned policy\n\n";
+ 
+-    // Reset the environment to a clean state before RL training
+     env.reset();
+-
+-    // Wrap the grid in a gym-style interface
+     RLEnvironment rlEnv(env);
+-
+-    // Collect RL greedy path lengths for final summary table
+     vector<pair<string,int>> rlSummary;
+ 
+-    // Shared hyperparameters for both agents:
+-    //   learningRate  = 0.1   — small, stable updates
+-    //   discountFactor= 0.95  — values long-term reward (goal is far away)
+-    //   epsilonStart  = 1.0   — fully random at start, agent knows nothing
+-    //   epsilonMin    = 0.05  — always keep 5% exploration
+-    //   epsilonDecay  = 0.995 — slow decay, enough episodes to explore the maze
+     const double learningRate   = 0.1;
+     const double discountFactor = 0.95;
+     const double epsilonStart   = 1.0;
+     const double epsilonMin     = 0.05;
+-    const double epsilonDecay   = 0.995;
+-
+-    const int numEpisodes        = 10000;
+-    const int maxStepsPerEpisode = rlEnv.getWidth() * rlEnv.getHeight() * 4;
++    const double epsilonDecay        = 0.995;
++    const int    maxStepsPerEpisode  = rlEnv.getWidth() * rlEnv.getHeight() * 4;
+ 
+-    CurriculumScheduler sched(numEpisodes);
++    CurriculumScheduler sched(stageLengths);
+     cout << "\nCurriculum Learning Schedule:\n";
+     sched.printSchedule();
+     cout << "\n";
+@@ -239,33 +291,33 @@ int main()
+         cout << "--------|--------------|-------|--------------|--------\n";
+         cout.flush();
+ 
+-        vector<TrainingResult> trainingHistory;
+-        trainingHistory.reserve(numEpisodes);
++        vector<TrainingResult> history;
++        history.reserve(numEpisodes);
+         for (int ep = 1; ep <= numEpisodes; ++ep)
+         {
+             if (sched.isStageTransition(ep - 1)) {
+                 const CurriculumScheduler::Stage& stage = sched.getStageForEpisode(ep - 1);
+-                env.generateLabyrinth(stage.loopDensity, static_cast<unsigned>(stage.stageIndex + 1) * 37u);
++                env.generateLabyrinth(stage.loopDensity,
++                                      static_cast<unsigned>(stage.stageIndex + 1) * 37u);
+                 rlEnv.reset();
+             }
+             TrainingResult r = agent.runEpisode(ep, maxStepsPerEpisode);
+-            trainingHistory.push_back(r);
++            history.push_back(r);
+             if (ep % 1000 == 0)
+             {
+-                cout << r.episodeNumber   << "\t| "
++                cout << r.episodeNumber << "\t| "
+                      << (r.goalReached ? "YES" : "NO") << "\t\t| "
+-                     << r.stepsToGoal     << "\t| "
+-                     << r.totalReward     << "\t\t| "
+-                     << r.epsilonAtEnd    << "\n";
++                     << r.stepsToGoal  << "\t| "
++                     << r.totalReward  << "\t\t| "
++                     << r.epsilonAtEnd << "\n";
+                 cout.flush();
+             }
+         }
+ 
+-        // Write full training history to CSV
+         {
+             ofstream csv("qlearning_training.csv");
+             csv << "episode,total_reward,steps,goal_reached,epsilon\n";
+-            for (const TrainingResult& r : trainingHistory)
++            for (const TrainingResult& r : history)
+                 csv << r.episodeNumber << ","
+                     << r.totalReward   << ","
+                     << r.stepsToGoal   << ","
+@@ -274,27 +326,28 @@ int main()
+             cout << "Training data written to qlearning_training.csv\n";
+         }
+ 
+-        int bestQLSteps = -1;
+-        for (const TrainingResult& result : trainingHistory)
+-            if (result.goalReached && (bestQLSteps == -1 || result.stepsToGoal < bestQLSteps))
+-                bestQLSteps = result.stepsToGoal;
+-
+-        if (bestQLSteps == -1)
+-        {
+-            cout << "\nAgent did not reach goal in any episode.\n";
+-            rlSummary.push_back({"Q-Learning", -1});
+-        }
+-        else
+-        {
+-            cout << "\nBest path length during training: " << bestQLSteps << " steps\n";
+-            rlSummary.push_back({"Q-Learning", bestQLSteps});
+-        }
++        auto bestIt = std::min_element(history.begin(), history.end(),
++            [](const TrainingResult& a, const TrainingResult& b) {
++                if (!a.goalReached) return false;
++                if (!b.goalReached) return true;
++                return a.stepsToGoal < b.stepsToGoal;
++            });
++        int best = (bestIt != history.end() && bestIt->goalReached) ? bestIt->stepsToGoal : -1;
++
++        if (best == -1) cout << "\nAgent did not reach goal in any episode.\n";
++        else            cout << "\nBest path length during training: " << best << " steps\n";
++        rlSummary.push_back({"Q-Learning", best});
+     }
+ 
+-    // ---- Dyna-Q (model-based RL, n=10) --------------------------------------
++    // ---- Dyna-Q (n=10) ------------------------------------------------------
+     Visualizer::printSection("Dyna-Q (model-based RL, n=10)");
+-
+-    // Reset rlEnv between agent runs so Dyna-Q starts from clean state
++    cout << "Dyna-Q adds one idea to Q-Learning: after each real step, replay 10 past transitions\n";
++    cout << "from memory. The agent 'imagines' experiences it has already had, squeezing 10 extra\n";
++    cout << "Q-value updates out of every real environment interaction.\n";
++    cout << "This is model-based RL: the agent builds an internal model of the world and plans in it.\n";
++    cout << "The n=10 in the title means 10 imagined steps per real step — 11x the learning signal.\n";
++    cout << "Watch: Dyna-Q should reach the goal in fewer episodes than Q-Learning above.\n\n";
++    cout << "Same columns as Q-Learning above.\n\n";
+     rlEnv.reset();
+ 
+     {
+@@ -308,33 +361,33 @@ int main()
+         cout << "--------|--------------|-------|--------------|--------\n";
+         cout.flush();
+ 
+-        vector<TrainingResult> trainingHistory;
+-        trainingHistory.reserve(numEpisodes);
++        vector<TrainingResult> history;
++        history.reserve(numEpisodes);
+         for (int ep = 1; ep <= numEpisodes; ++ep)
+         {
+             if (sched.isStageTransition(ep - 1)) {
+                 const CurriculumScheduler::Stage& stage = sched.getStageForEpisode(ep - 1);
+-                env.generateLabyrinth(stage.loopDensity, static_cast<unsigned>(stage.stageIndex + 1) * 37u);
++                env.generateLabyrinth(stage.loopDensity,
++                                      static_cast<unsigned>(stage.stageIndex + 1) * 37u);
+                 rlEnv.reset();
+             }
+             TrainingResult r = agent.runEpisode(ep, maxStepsPerEpisode);
+-            trainingHistory.push_back(r);
++            history.push_back(r);
+             if (ep % 1000 == 0)
+             {
+-                cout << r.episodeNumber   << "\t| "
++                cout << r.episodeNumber << "\t| "
+                      << (r.goalReached ? "YES" : "NO") << "\t\t| "
+-                     << r.stepsToGoal     << "\t| "
+-                     << r.totalReward     << "\t\t| "
+-                     << r.epsilonAtEnd    << "\n";
++                     << r.stepsToGoal  << "\t| "
++                     << r.totalReward  << "\t\t| "
++                     << r.epsilonAtEnd << "\n";
+                 cout.flush();
+             }
+         }
+ 
+-        // Write full training history to CSV
+         {
+             ofstream csv("dynaq_training.csv");
+             csv << "episode,total_reward,steps,goal_reached,epsilon\n";
+-            for (const TrainingResult& r : trainingHistory)
++            for (const TrainingResult& r : history)
+                 csv << r.episodeNumber << ","
+                     << r.totalReward   << ","
+                     << r.stepsToGoal   << ","
+@@ -343,53 +396,53 @@ int main()
+             cout << "Training data written to dynaq_training.csv\n";
+         }
+ 
+-        int bestDQSteps = -1;
+-        for (const TrainingResult& result : trainingHistory)
+-            if (result.goalReached && (bestDQSteps == -1 || result.stepsToGoal < bestDQSteps))
+-                bestDQSteps = result.stepsToGoal;
+-
+-        if (bestDQSteps == -1)
+-        {
+-            cout << "\nAgent did not reach goal in any episode.\n";
+-            rlSummary.push_back({"Dyna-Q (n=10)", -1});
+-        }
+-        else
+-        {
+-            cout << "\nBest path length during training: " << bestDQSteps << " steps\n";
+-            rlSummary.push_back({"Dyna-Q (n=10)", bestDQSteps});
+-        }
++        auto bestIt = std::min_element(history.begin(), history.end(),
++            [](const TrainingResult& a, const TrainingResult& b) {
++                if (!a.goalReached) return false;
++                if (!b.goalReached) return true;
++                return a.stepsToGoal < b.stepsToGoal;
++            });
++        int best = (bestIt != history.end() && bestIt->goalReached) ? bestIt->stepsToGoal : -1;
++
++        if (best == -1) cout << "\nAgent did not reach goal in any episode.\n";
++        else            cout << "\nBest path length during training: " << best << " steps\n";
++        rlSummary.push_back({"Dyna-Q (n=10)", best});
+     }
+ 
+-    // =========================================================================
+-    // Section 6: Final unified comparison
+-    // =========================================================================
+-    Visualizer::printSection("Full System Comparison");
+-    Visualizer::displayFinalSummary(results, rlSummary);
++    return rlSummary;
++}
+ 
+-    // =========================================================================
+-    // Section 7: Dynamic obstacles + partial observability (Phase 8)
+-    // =========================================================================
++static void sectionDynamicObstacles()
++{
+     Visualizer::printSection("Dynamic Obstacles + Partial Observability");
++    cout << "Classical planning assumed a static map. Real environments change — cars move,\n";
++    cout << "people walk, doors open. This demo combines two ideas from autonomous vehicles:\n\n";
++    cout << "D* Lite replanning: when an obstacle moves, don't replan from scratch. D* Lite\n";
++    cout << "repairs only the parts of the path that changed. Efficient for live replanning.\n\n";
++    cout << "Partial observability: the robot can't see the whole map — only within sensor range.\n";
++    cout << "Cells beyond range are unknown. Noisy sensors add false positives (sees phantom obstacles)\n";
++    cout << "and false negatives (misses real ones). The Bayesian update from the previous section\n";
++    cout << "is how you fuse noisy sensor readings into a reliable occupancy grid.\n\n";
++    cout << "  Tick          = one simulation time step — obstacles move, robot may replan\n";
++    cout << "  Path length   = current best path length after replanning around moved obstacles\n";
++    cout << "  Range         = sensor detection radius in Manhattan distance (cells)\n";
++    cout << "  Cells scanned = total cells the sensor inspected this observation\n";
++    cout << "  Obstacles detected = cells the sensor reported as blocked (includes false positives)\n";
++    cout << "  FP = false positive rate (sensor says blocked when it isn't)\n";
++    cout << "  FN = false negative rate (sensor misses a real obstacle)\n\n";
+ 
+-    // 21-wide x 11-tall grid — small enough for readable terminal output.
+     DynamicEnvironment dynamicEnv(21, 11);
+     dynamicEnv.setStart(Position(0,  0));
+     dynamicEnv.setGoal( Position(20, 10));
+ 
+-    // Static L-shaped wall that forces the path through a constrained corridor.
+-    for (int y = 2; y <= 6; ++y)   dynamicEnv.setObstacle(Position(7, y));
+-    for (int x = 8; x <= 14; ++x)  dynamicEnv.setObstacle(Position(x, 6));
++    for (int y = 2; y <= 6;  ++y) dynamicEnv.setObstacle(Position(7,  y));
++    for (int x = 8; x <= 14; ++x) dynamicEnv.setObstacle(Position(x,  6));
+ 
+-    // Dynamic obstacle 1 — horizontal patrol along row y=8 (below the static wall), columns 2..17.
+-    // Moves every 2 ticks (slower obstacle — like a slow-moving vehicle).
+-    // Row y=8 is chosen to avoid the static wall at x=7,y=2..6 and x=8..14,y=6.
+     std::vector<Position> horizontalPatrol;
+     for (int x =  2; x <= 17; ++x) horizontalPatrol.push_back(Position(x, 8));
+     for (int x = 16; x >=  3; --x) horizontalPatrol.push_back(Position(x, 8));
+     dynamicEnv.addDynamicObstacle(horizontalPatrol, 2);
+ 
+-    // Dynamic obstacle 2 — vertical patrol along column x=16, rows 1..8.
+-    // Moves every tick (faster obstacle — like a pedestrian).
+     std::vector<Position> verticalPatrol;
+     for (int y = 1; y <= 8; ++y) verticalPatrol.push_back(Position(16, y));
+     for (int y = 7; y >= 2; --y) verticalPatrol.push_back(Position(16, y));
+@@ -397,39 +450,28 @@ int main()
+ 
+     cout << "Environment: 21x11  Start: (0,0)  Goal: (20,10)\n";
+     cout << "Dynamic obstacles: " << dynamicEnv.getDynamicObstacleCount() << "\n";
+-    cout << "  Obstacle 1 — horizontal patrol y=8, x=2..17, 1 step per 2 ticks\n";
+-    cout << "  Obstacle 2 — vertical patrol   x=16, y=1..8, 1 step per tick\n\n";
+-
+-    // D* Lite for replanning.
+-    // Note: DStarLite::updateObstacle() is not yet implemented (stub) —
+-    // each replan calls findPath() from scratch. This is functionally correct;
+-    // true incremental replanning is a future optimisation.
+-    DStarLite dstarPhase8;
+-
+-    // Initial plan — obstacles at their starting positions.
+-    std::vector<Position> dynamicPath = dstarPhase8.findPath(dynamicEnv,
+-                                                              dynamicEnv.getStart(),
+-                                                              dynamicEnv.getGoal());
++    cout << "  Obstacle 1 — horizontal patrol y = 8,  x = 2..17, 1 step per 2 ticks\n";
++    cout << "  Obstacle 2 — vertical patrol   x = 16, y = 1..8,  1 step per tick\n\n";
++
++    DStarLite dstar;
++    std::vector<Position> dynamicPath = dstar.findPath(dynamicEnv,
++                                                        dynamicEnv.getStart(),
++                                                        dynamicEnv.getGoal());
+     cout << "--- Tick 0 (initial) ---\n";
+-    if (dynamicPath.empty())
+-        cout << "  [no path found]\n";
+-    else
+-        cout << "  Path length: " << dynamicPath.size() << " steps\n\n";
++    if (dynamicPath.empty()) cout << "  [no path found]\n";
++    else cout << "  Path length: " << dynamicPath.size() << " steps\n\n";
+ 
+-    // Simulate ticks and replan after each batch.
+     const int ticksPerSnapshot = 5;
+     const int totalTicks       = 15;
+-
+     for (int tick = 1; tick <= totalTicks; ++tick)
+     {
+         dynamicEnv.tick();
+-
+         if (tick % ticksPerSnapshot == 0)
+         {
+-            dynamicEnv.reset();  // clear PATH/VISITED overlays only
+-            dynamicPath = dstarPhase8.findPath(dynamicEnv,
+-                                               dynamicEnv.getStart(),
+-                                               dynamicEnv.getGoal());
++            dynamicEnv.reset();
++            dynamicPath = dstar.findPath(dynamicEnv,
++                                         dynamicEnv.getStart(),
++                                         dynamicEnv.getGoal());
+             cout << "--- Tick " << tick << " ---\n";
+             if (dynamicPath.empty())
+                 cout << "  [no path — obstacles blocked all routes]\n\n";
+@@ -438,36 +480,159 @@ int main()
+         }
+     }
+ 
+-    // Partial observability — SensorModel at the agent's start position.
+-    // Range 5, no noise (perfect sensor within range).
+     SensorModel sensor(5, 0.0, 0.0);
+-    std::vector<SensorModel::Observation> sensorReadings =
++    std::vector<SensorModel::Observation> readings =
+         sensor.observe(dynamicEnv.getStart(), dynamicEnv);
+ 
+-    int obstaclesDetected = 0;
+-    for (const SensorModel::Observation& reading : sensorReadings)
+-        if (reading.reportedAsObstacle) ++obstaclesDetected;
++    int obstaclesDetected = static_cast<int>(
++        std::count_if(readings.begin(), readings.end(),
++                      [](const SensorModel::Observation& obs) { return obs.reportedAsObstacle; }));
+ 
+     cout << "Sensor observation from start (0,0):\n";
+     cout << "  Range:              " << sensor.getSensorRange() << " (Manhattan)\n";
+-    cout << "  Cells scanned:      " << sensorReadings.size()  << "\n";
+-    cout << "  Obstacles detected: " << obstaclesDetected       << "\n";
+-    cout << "  Cells clear:        " << sensorReadings.size() - obstaclesDetected << "\n";
++    cout << "  Cells scanned:      " << readings.size()         << "\n";
++    cout << "  Obstacles detected: " << obstaclesDetected        << "\n";
++    cout << "  Cells clear:        " << readings.size() - obstaclesDetected << "\n";
+     cout << "  (cells beyond range are unknown — planner uses prior beliefs)\n\n";
+ 
+-    // Noisy sensor demo — 10% false positive, 5% false negative.
+     SensorModel noisySensor(5, 0.1, 0.05);
+     std::vector<SensorModel::Observation> noisyReadings =
+         noisySensor.observe(dynamicEnv.getStart(), dynamicEnv);
+ 
+-    int noisyObstacles = 0;
+-    for (const SensorModel::Observation& reading : noisyReadings)
+-        if (reading.reportedAsObstacle) ++noisyObstacles;
++    int noisyObstacles = static_cast<int>(
++        std::count_if(noisyReadings.begin(), noisyReadings.end(),
++                      [](const SensorModel::Observation& obs) { return obs.reportedAsObstacle; }));
+ 
+-    cout << "Noisy sensor (FP=10%, FN=5%) from start (0,0):\n";
++    cout << "Noisy sensor (FP = 10%, FN = 5%) from start (0,0):\n";
+     cout << "  Obstacles reported: " << noisyObstacles << "\n";
+     cout << "  (perfect sensor reported " << obstaclesDetected
+          << " — difference is sensor noise)\n";
++}
++
++// =============================================================================
++// Run all C++ demos in the original sequence with final comparison
++// =============================================================================
++
++static void runAllCppDemos()
++{
++    Environment env = buildScenario();
++
++    vector<PathResult> results = sectionAlgorithms(env);
++    sectionCBS();
++    sectionBayesian(results);
++    vector<pair<string,int>> rlSummary = sectionTabularRL(env);
++    sectionDynamicObstacles();
++
++    Visualizer::printSection("Full System Comparison");
++    Visualizer::displayFinalSummary(results, rlSummary);
++}
++
++// =============================================================================
++// Menu
++// =============================================================================
++
++static void menuCppDemos()
++{
++    string input;
++    while (true)
++    {
++        cout << "\n";
++        Visualizer::printSection("C++ Demos");
++        cout << "  1. Classical Pathfinding (9 algorithms)\n";
++        cout << "  2. Multi-Agent Pathfinding (CBS)\n";
++        cout << "  3. Bayesian Sensor Fusion\n";
++        cout << "  4. Tabular RL — Q-Learning + Dyna-Q\n";
++        cout << "  5. Dynamic Obstacles + Partial Observability\n";
++        cout << "  0. Back\n";
++        cout << "\nChoice: ";
++        if (!(cin >> input)) break;
++
++        if      (input == "1") { auto env = buildScenario(); sectionAlgorithms(env); }
++        else if (input == "2") { sectionCBS(); }
++        else if (input == "3") { sectionBayesian({}); }
++        else if (input == "4") { auto env = buildScenario(); sectionTabularRL(env); }
++        else if (input == "5") { sectionDynamicObstacles(); }
++        else if (input == "0") { break; }
++        else { cout << "Unknown option.\n"; }
++    }
++}
++
++static void menuTraining()
++{
++    string input;
++    while (true)
++    {
++        cout << "\n";
++        Visualizer::printSection("Python — Training");
++        cout << "  1. Generate Heuristic Training Data\n";
++        cout << "  2. Train Heuristic Network (Neural A*)\n";
++        cout << "  3. Train DQN\n";
++        cout << "  4. Train DQN + HER\n";
++        cout << "  5. Train PPO\n";
++        cout << "  6. Train Decision Transformer\n";
++        cout << "  7. Train Trajectory Diffuser\n";
++        cout << "  0. Back\n";
++        cout << "\nChoice: ";
++        if (!(cin >> input)) break;
++
++        if      (input == "1") { runPythonScript("generate_heuristic_data.py"); }
++        else if (input == "2") { runPythonScript("train_heuristic_net.py"); }
++        else if (input == "3") { runPythonScript("train_dqn.py"); }
++        else if (input == "4") { runPythonScript("train_dqn_her.py"); }
++        else if (input == "5") { runPythonScript("train_ppo.py"); }
++        else if (input == "6") { runPythonScript("train_decision_transformer.py"); }
++        else if (input == "7") { runPythonScript("train_diffuser.py"); }
++        else if (input == "0") { break; }
++        else { cout << "Unknown option.\n"; }
++    }
++}
++
++static void menuBenchmarks()
++{
++    string input;
++    while (true)
++    {
++        cout << "\n";
++        Visualizer::printSection("Python — Benchmarks & Visualisation");
++        cout << "  1. Benchmark Neural A*\n";
++        cout << "  2. Benchmark All Algorithms (statistical)\n";
++        cout << "  3. Visualise Heuristic Quality\n";
++        cout << "  4. Value Heatmap (DQN)\n";
++        cout << "  0. Back\n";
++        cout << "\nChoice: ";
++        if (!(cin >> input)) break;
++
++        if      (input == "1") { runPythonScript("benchmark_neural_astar.py"); }
++        else if (input == "2") { runPythonScript("statistical_benchmark.py"); }
++        else if (input == "3") { runPythonScript("visualization/heuristic_quality.py"); }
++        else if (input == "4") { runPythonScript("value_heatmap.py"); }
++        else if (input == "0") { break; }
++        else { cout << "Unknown option.\n"; }
++    }
++}
++
++int main()
++{
++    string input;
++    while (true)
++    {
++        cout << "\n";
++        Visualizer::printSection("PathPlanning System");
++        cout << "  1. C++ Demos\n";
++        cout << "  2. Python — Training\n";
++        cout << "  3. Python — Benchmarks & Visualisation\n";
++        cout << "  A. Run all C++ demos (full sequence)\n";
++        cout << "  0. Exit\n";
++        cout << "\nChoice: ";
++        if (!(cin >> input)) break;
++
++        if      (input == "1")                 { menuCppDemos(); }
++        else if (input == "2")                 { menuTraining(); }
++        else if (input == "3")                 { menuBenchmarks(); }
++        else if (input == "a" || input == "A") { runAllCppDemos(); }
++        else if (input == "0")                 { break; }
++        else { cout << "Unknown option.\n"; }
++    }
+ 
+     return 0;
+ }
+diff --git a/planning/CurriculumScheduler.cpp b/planning/CurriculumScheduler.cpp
+index 56160d77..c0a543c3 100644
+--- a/planning/CurriculumScheduler.cpp
++++ b/planning/CurriculumScheduler.cpp
+@@ -1,34 +1,55 @@
+ #include "CurriculumScheduler.h"
+ #include <iostream>
+ #include <iomanip>
++#include <algorithm>
+ #include <stdexcept>
+ 
+-CurriculumScheduler::CurriculumScheduler(int totalEpisodes, int numStages,
+-                                         double startDensity, double endDensity)
++void CurriculumScheduler::buildFromLengths(const std::vector<int>& stageLengths,
++                                            double startDensity, double endDensity)
+ {
+-    if (numStages < 1) throw std::invalid_argument("numStages must be >= 1");
+-
+-    int baseLen = totalEpisodes / numStages;
+-    int remainder = totalEpisodes % numStages;
+-
++    int numStages = static_cast<int>(stageLengths.size());
+     stages_.reserve(numStages);
+     int cursor = 0;
+-    for (int i = 0; i < numStages; ++i) {
+-        double t = (numStages == 1) ? 0.0
+-                                    : static_cast<double>(i) / (numStages - 1);
++    for (int i = 0; i < numStages; ++i)
++    {
++        double t       = (numStages == 1) ? 0.0
++                                          : static_cast<double>(i) / (numStages - 1);
+         double density = startDensity + t * (endDensity - startDensity);
+-
+-        int len = baseLen + (i < remainder ? 1 : 0);
+         Stage s;
+         s.startEpisode = cursor;
+-        s.endEpisode   = cursor + len - 1;
++        s.endEpisode   = cursor + stageLengths[i] - 1;
+         s.loopDensity  = density;
+         s.stageIndex   = i;
+         stages_.push_back(s);
+-        cursor += len;
++        cursor += stageLengths[i];
+     }
+ }
+ 
++CurriculumScheduler::CurriculumScheduler(int totalEpisodes, int numStages,
++                                         double startDensity, double endDensity)
++{
++    if (numStages < 1) throw std::invalid_argument("numStages must be >= 1");
++
++    int baseLen   = totalEpisodes / numStages;
++    int remainder = totalEpisodes % numStages;
++
++    std::vector<int> stageLengths(numStages);
++    for (int i = 0; i < numStages; ++i)
++        stageLengths[i] = baseLen + (i < remainder ? 1 : 0);
++
++    buildFromLengths(stageLengths, startDensity, endDensity);
++}
++
++CurriculumScheduler::CurriculumScheduler(const std::vector<int>& stageLengths,
++                                         double startDensity, double endDensity)
++{
++    if (stageLengths.empty()) throw std::invalid_argument("stageLengths must not be empty");
++    for (int len : stageLengths)
++        if (len < 1) throw std::invalid_argument("each stage length must be >= 1");
++
++    buildFromLengths(stageLengths, startDensity, endDensity);
++}
++
+ double CurriculumScheduler::getDensityForEpisode(int episode) const
+ {
+     return getStageForEpisode(episode).loopDensity;
+@@ -36,20 +57,17 @@ double CurriculumScheduler::getDensityForEpisode(int episode) const
+ 
+ const CurriculumScheduler::Stage& CurriculumScheduler::getStageForEpisode(int episode) const
+ {
+-    for (const Stage& s : stages_) {
+-        if (episode >= s.startEpisode && episode <= s.endEpisode)
+-            return s;
+-    }
+-    return stages_.back();
++    auto it = std::find_if(stages_.begin(), stages_.end(),
++        [episode](const Stage& s) {
++            return episode >= s.startEpisode && episode <= s.endEpisode;
++        });
++    return (it != stages_.end()) ? *it : stages_.back();
+ }
+ 
+ bool CurriculumScheduler::isStageTransition(int episode) const
+ {
+-    for (const Stage& s : stages_) {
+-        if (episode == s.startEpisode)
+-            return true;
+-    }
+-    return false;
++    return std::any_of(stages_.begin(), stages_.end(),
++        [episode](const Stage& s) { return episode == s.startEpisode; });
+ }
+ 
+ int CurriculumScheduler::getNumStages() const
+@@ -68,7 +86,7 @@ void CurriculumScheduler::printSchedule() const
+         std::cout << "Stage " << (s.stageIndex + 1) << ": episodes "
+                   << std::setw(5) << s.startEpisode << "-"
+                   << std::setw(5) << s.endEpisode
+-                  << "  density=" << std::fixed << std::setprecision(2) << s.loopDensity;
++                  << "  density = " << std::fixed << std::setprecision(2) << s.loopDensity;
+         if (s.stageIndex == 0)
+             std::cout << " (easy)";
+         else if (s.stageIndex == static_cast<int>(stages_.size()) - 1)
+diff --git a/planning/CurriculumScheduler.h b/planning/CurriculumScheduler.h
+index 43313478..9af646ed 100644
+--- a/planning/CurriculumScheduler.h
++++ b/planning/CurriculumScheduler.h
+@@ -12,9 +12,15 @@ public:
+         int stageIndex;
+     };
+ 
++    // Equal stage lengths — divides totalEpisodes evenly across numStages.
+     CurriculumScheduler(int totalEpisodes, int numStages = 4,
+                         double startDensity = 0.5, double endDensity = 0.1);
+ 
++    // Explicit stage lengths — each entry is the episode count for that stage.
++    // Density interpolates from startDensity to endDensity across stages.
++    CurriculumScheduler(const std::vector<int>& stageLengths,
++                        double startDensity = 0.5, double endDensity = 0.1);
++
+     double getDensityForEpisode(int episode) const;
+     const Stage& getStageForEpisode(int episode) const;
+     bool isStageTransition(int episode) const;
+@@ -24,6 +30,9 @@ public:
+ 
+ private:
+     std::vector<Stage> stages_;
++
++    void buildFromLengths(const std::vector<int>& stageLengths,
++                          double startDensity, double endDensity);
+ };
+ 
+ #endif  // CURRICULUMSCHEDULER_H
+diff --git a/planning/algorithms/AStar.cpp b/planning/algorithms/AStar.cpp
+index 9cab5bac..be81a3a7 100644
+--- a/planning/algorithms/AStar.cpp
++++ b/planning/algorithms/AStar.cpp
+@@ -14,9 +14,17 @@ bool NodeComparator::operator()(const AStarNode& a, const AStarNode& b) const
+ 
+ // ---- AStar ------------------------------------------------------------------
+ 
++AStar::AStar(double epsilon)
++    : epsilon_(epsilon)
++{
++    if (epsilon < 1.0)
++        throw std::invalid_argument("AStar: epsilon must be >= 1.0 (values below 1 break admissibility)");
++}
++
+ string AStar::getName() const
+ {
+-    return "A*";
++    if (epsilon_ == 1.0) return "A*";
++    return "A* (e=" + std::to_string(epsilon_).substr(0, 4) + ")";
+ }
+ 
+ int AStar::getNodesExplored() const
+@@ -24,6 +32,11 @@ int AStar::getNodesExplored() const
+     return nodesExplored_;
+ }
+ 
++double AStar::getEpsilon() const
++{
++    return epsilon_;
++}
++
+ AlgorithmType AStar::getType() const
+ {
+     return AlgorithmType::ASTAR;
+@@ -31,16 +44,17 @@ AlgorithmType AStar::getType() const
+ 
+ double AStar::heuristicDistance(const Position& a, const Position& b) const
+ {
+-    return abs(a.x - b.x) + abs(a.y - b.y);
++    // epsilon_ = 1.0 → standard admissible A*.
++    // epsilon_ > 1.0 → weighted A*: heuristic is inflated, search is greedier.
++    // Path quality guarantee: found_cost ≤ epsilon_ × optimal_cost.
++    return epsilon_ * (abs(a.x - b.x) + abs(a.y - b.y));
+ }
+ 
+ double AStar::costFromStartTo(const Position& p) const
+ {
+-    unordered_map<Position, double, PositionHash>::const_iterator iterCostTable = costFromStart_.find(p);
+-    if (iterCostTable != costFromStart_ .end())
+-        return iterCostTable->second;
+-    else
+-        return numeric_limits<double>::infinity();
++    if (auto it = costFromStart_.find(p); it != costFromStart_.end())
++        return it->second;
++    return numeric_limits<double>::infinity();
+ }
+ 
+ void AStar::clearState()
+diff --git a/planning/algorithms/AStar.h b/planning/algorithms/AStar.h
+index c0990d2d..885928a3 100644
+--- a/planning/algorithms/AStar.h
++++ b/planning/algorithms/AStar.h
+@@ -56,10 +56,21 @@ struct NodeComparator
+ };
+ 
+ // ---- AStar ------------------------------------------------------------------
++//
++// CONCEPT — Weighted A* (ε-A*)
++//   Standard A* uses f(n) = g(n) + h(n). Weighted A* uses f(n) = g(n) + ε·h(n).
++//   ε = 1.0: identical to A* — optimal path guaranteed.
++//   ε > 1.0: heuristic is amplified — search is more greedy, expands fewer nodes,
++//            but the found path is guaranteed ≤ ε × optimal cost.
++//   This gives a formal, tunable optimality/speed tradeoff — not just a heuristic.
++//   Real-time robotics use case: obstacle detected, need a route in 5ms not 50ms;
++//   ε = 2.0 finds a route in a fraction of the time, guaranteed within 2× optimal.
+ class AStar : public IPathfinder
+ {
+ public:
+-    AStar() = default;
++    // epsilon = 1.0 → standard A* (default, backward compatible).
++    // epsilon > 1.0 → weighted A*. Throws if epsilon < 1.0.
++    explicit AStar(double epsilon = 1.0);
+ 
+     std::vector<Position> findPath(
+         const Environment& env,
+@@ -69,10 +80,12 @@ public:
+ 
+     std::string   getName() const override;
+     AlgorithmType getType() const override;
+-    int getNodesExplored() const override;
++    int           getNodesExplored() const override;
++    double        getEpsilon() const;
+ 
+ private:
+-    int nodesExplored_ = 0;
++    double epsilon_       = 1.0;
++    int    nodesExplored_ = 0;
+     // Per-call state — cleared before each findPath() invocation.
+     std::unordered_map<Position, double,   PositionHash> costFromStart_;
+     std::unordered_map<Position, Position, PositionHash> arrivedFrom_;
+diff --git a/planning/algorithms/CBS.cpp b/planning/algorithms/CBS.cpp
+index 5dfbd721..44cd8598 100644
+--- a/planning/algorithms/CBS.cpp
++++ b/planning/algorithms/CBS.cpp
+@@ -285,6 +285,8 @@ MultiAgentPaths CBS::findPaths(const Environment&        environment,
+ 
+     while (!openCT.empty())
+     {
++        if (maxCTNodes_ > 0 && nodesExpanded_ >= maxCTNodes_) return {};
++
+         CBSNode current = openCT.top();
+         openCT.pop();
+         ++nodesExpanded_;
+diff --git a/planning/algorithms/CBS.h b/planning/algorithms/CBS.h
+index 2aaa004c..962838df 100644
+--- a/planning/algorithms/CBS.h
++++ b/planning/algorithms/CBS.h
+@@ -131,7 +131,7 @@ public:
+ 
+ private:
+     int maxTimesteps_;
+-    int maxCTNodes_;
++    int maxCTNodes_;    // 0 = no cap; >0 = hard limit on CT expansions
+     int nodesExpanded_;
+ 
+     // ---- Low-level planner --------------------------------------------------
+diff --git a/planning/algorithms/RRT.cpp b/planning/algorithms/RRT.cpp
+index b4c33385..9403734c 100644
+--- a/planning/algorithms/RRT.cpp
++++ b/planning/algorithms/RRT.cpp
+@@ -1,16 +1,22 @@
+ // planning/algorithms/RRT.cpp
+ #include "RRT.h"
+ #include <cmath>
+-#include <limits>
++#include <random>
+ #include <algorithm>
+ 
+ using namespace std;
+ 
+-// ---- RRT --------------------------------------------------------------------
++// ---- Constructor ------------------------------------------------------------
++
++RRT::RRT(bool useRewiring)
++    : useRewiring_(useRewiring)
++{}
++
++// ---- IPathfinder interface --------------------------------------------------
+ 
+ string RRT::getName() const
+ {
+-    return "RRT";
++    return useRewiring_ ? "RRT*" : "RRT";
+ }
+ 
+ AlgorithmType RRT::getType() const
+@@ -23,6 +29,8 @@ int RRT::getNodesExplored() const
+     return nodesExplored_;
+ }
+ 
++// ---- Tree helpers -----------------------------------------------------------
++
+ void RRT::clearState()
+ {
+     tree_.clear();
+@@ -31,21 +39,13 @@ void RRT::clearState()
+ 
+ int RRT::nearestNodeIndex(const Position& target) const
+ {
+-    int    bestIdx  = 0;
+-    double bestDist = numeric_limits<double>::max();
+-
+-    for (int i = 0; i < (int)tree_.size(); ++i)
+-    {
+-        double dx   = tree_[i].pos.x - target.x;
+-        double dy   = tree_[i].pos.y - target.y;
+-        double dist = dx * dx + dy * dy;
+-        if (dist < bestDist)
+-        {
+-            bestDist = dist;
+-            bestIdx  = i;
+-        }
+-    }
+-    return bestIdx;
++    auto nearest = std::min_element(tree_.begin(), tree_.end(),
++        [&target](const RRTNode& a, const RRTNode& b) {
++            double dxa = a.pos.x - target.x,  dya = a.pos.y - target.y;
++            double dxb = b.pos.x - target.x,  dyb = b.pos.y - target.y;
++            return (dxa * dxa + dya * dya) < (dxb * dxb + dyb * dyb);
++        });
++    return static_cast<int>(nearest - tree_.begin());
+ }
+ 
+ Position RRT::steer(const Position& nearest, const Position& target) const
+@@ -92,30 +92,108 @@ bool RRT::isCollisionFree(const Environment& env,
+ vector<Position> RRT::extractPath(int goalNodeIndex) const
+ {
+     vector<Position> path;
+-    int idx = goalNodeIndex;
++    int index = goalNodeIndex;
+ 
+-    while (idx != -1)
++    while (index != -1)
+     {
+-        path.push_back(tree_[idx].pos);
+-        idx = tree_[idx].parentIndex;
++        path.push_back(tree_[index].pos);
++        index = tree_[index].parentIndex;
+     }
+ 
+     reverse(path.begin(), path.end());
+     return path;
+ }
+ 
++double RRT::euclideanDistance(const Position& a, const Position& b) const
++{
++    double dx = a.x - b.x;
++    double dy = a.y - b.y;
++    return sqrt(dx * dx + dy * dy);
++}
++
++vector<int> RRT::findNearNodes(const Position& center) const
++{
++    vector<int> nearNodeIndices;
++    for (int index = 0; index < (int)tree_.size(); ++index)
++    {
++        if (euclideanDistance(tree_[index].pos, center) <= rewireRadius_)
++            nearNodeIndices.push_back(index);
++    }
++    return nearNodeIndices;
++}
++
++void RRT::rewire(int newNodeIndex, const vector<int>& nearNodeIndices,
++                  const Environment& env)
++{
++    // CONCEPT — Rewiring:
++    //   For each near node, check if routing through the new node gives it a
++    //   lower total cost from start. If yes and the direct edge is obstacle-free,
++    //   redirect its parent pointer to the new node and update its cost.
++    //   After updating the near node's cost, propagate the delta down through
++    //   its entire subtree — without propagation, descendants retain stale costs
++    //   and future best-parent selections use wrong numbers, breaking optimality.
++    const RRTNode& newNode = tree_[newNodeIndex];
++
++    for (int nearIndex : nearNodeIndices)
++    {
++        if (nearIndex == newNode.parentIndex) continue;
++
++        double edgeCost       = euclideanDistance(newNode.pos, tree_[nearIndex].pos);
++        double costThroughNew = newNode.costFromStart + edgeCost;
++
++        if (costThroughNew < tree_[nearIndex].costFromStart
++            && isCollisionFree(env, newNode.pos, tree_[nearIndex].pos))
++        {
++            double costDelta                = costThroughNew - tree_[nearIndex].costFromStart;
++            tree_[nearIndex].parentIndex    = newNodeIndex;
++            tree_[nearIndex].costFromStart  = costThroughNew;
++            propagateSubtreeCosts(nearIndex, costDelta);
++        }
++    }
++}
++
++void RRT::propagateSubtreeCosts(int rewiredNodeIndex, double costDelta)
++{
++    // CONCEPT — O(n) subtree propagation via children map:
++    //   Naive BFS scans all of tree_ for each queued node → O(n²).
++    //   Building a children adjacency list first (one O(n) pass) lets BFS
++    //   walk only actual children → O(n) total regardless of subtree size.
++    vector<vector<int>> children(tree_.size());
++    for (int index = 0; index < (int)tree_.size(); ++index)
++    {
++        int parentIndex = tree_[index].parentIndex;
++        if (parentIndex >= 0 && parentIndex != index)
++            children[parentIndex].push_back(index);
++    }
++
++    vector<int> workQueue = {rewiredNodeIndex};
++    while (!workQueue.empty())
++    {
++        int currentIndex = workQueue.back();
++        workQueue.pop_back();
++
++        for (int childIndex : children[currentIndex])
++        {
++            tree_[childIndex].costFromStart += costDelta;
++            workQueue.push_back(childIndex);
++        }
++    }
++}
++
++// ---- findPath ---------------------------------------------------------------
++
+ vector<Position> RRT::findPath(const Environment& env,
+                                 const Position&    start,
+                                 const Position&    goal)
+ {
+     clearState();
+-    tree_.push_back({start, -1});
++    tree_.push_back({start, -1, 0.0});
+ 
+-    random_device                      rd;
+-    mt19937                            rng(rd());
+-    uniform_int_distribution<int>      distX(0, env.getWidth()  - 1);
+-    uniform_int_distribution<int>      distY(0, env.getHeight() - 1);
+-    uniform_real_distribution<double>  distBias(0.0, 1.0);
++    random_device                     rd;
++    mt19937                           rng(rd());
++    uniform_int_distribution<int>     distX(0, env.getWidth()  - 1);
++    uniform_int_distribution<int>     distY(0, env.getHeight() - 1);
++    uniform_real_distribution<double> distBias(0.0, 1.0);
+ 
+     for (int iter = 0; iter < maxIterations_; ++iter)
+     {
+@@ -123,24 +201,56 @@ vector<Position> RRT::findPath(const Environment& env,
+                           ? goal
+                           : Position(distX(rng), distY(rng));
+ 
+-        int      nearIdx = nearestNodeIndex(sample);
+-        Position nearest = tree_[nearIdx].pos;
+-        Position newPos  = steer(nearest, sample);
++        int      nearestIndex = nearestNodeIndex(sample);
++        Position nearest      = tree_[nearestIndex].pos;
++        Position newPos       = steer(nearest, sample);
+ 
+-        if (!env.isValid(newPos))          continue;
+-        if (!isCollisionFree(env, nearest, newPos)) continue;
++        if (!env.isValid(newPos))                      continue;
++        if (!isCollisionFree(env, nearest, newPos))    continue;
+ 
+-        int newIdx = (int)tree_.size();
+-        tree_.push_back({newPos, nearIdx});
+-        ++nodesExplored_;
++        int newNodeIndex = (int)tree_.size();
++
++        if (useRewiring_)
++        {
++            // CONCEPT — Best-parent selection:
++            //   Before adding the new node, check all near nodes to see if any
++            //   give a lower cost-from-start than the nearest node.
++            //   This alone (without rewiring) already improves path quality.
++            vector<int> nearNodeIndices = findNearNodes(newPos);
++
++            int    bestParentIndex = nearestIndex;
++            double bestCost        = tree_[nearestIndex].costFromStart
++                                     + euclideanDistance(nearest, newPos);
+ 
+-        double dx   = newPos.x - goal.x;
+-        double dy   = newPos.y - goal.y;
+-        double dist = sqrt(dx * dx + dy * dy);
++            for (int candidateIndex : nearNodeIndices)
++            {
++                double candidateCost = tree_[candidateIndex].costFromStart
++                                       + euclideanDistance(tree_[candidateIndex].pos, newPos);
++                if (candidateCost < bestCost
++                    && isCollisionFree(env, tree_[candidateIndex].pos, newPos))
++                {
++                    bestCost        = candidateCost;
++                    bestParentIndex = candidateIndex;
++                }
++            }
++
++            tree_.push_back({newPos, bestParentIndex, bestCost});
++            rewire(newNodeIndex, nearNodeIndices, env);
++        }
++        else
++        {
++            double costFromStart = tree_[nearestIndex].costFromStart
++                                   + euclideanDistance(nearest, newPos);
++            tree_.push_back({newPos, nearestIndex, costFromStart});
++        }
++
++        ++nodesExplored_;
+ 
+-        if (dist <= stepSize_ && isCollisionFree(env, newPos, goal))
++        double distToGoal = euclideanDistance(newPos, goal);
++        if (distToGoal <= stepSize_ && isCollisionFree(env, newPos, goal))
+         {
+-            tree_.push_back({goal, newIdx});
++            double goalCost = tree_[newNodeIndex].costFromStart + distToGoal;
++            tree_.push_back({goal, newNodeIndex, goalCost});
+             return extractPath((int)tree_.size() - 1);
+         }
+     }
+diff --git a/planning/algorithms/RRT.h b/planning/algorithms/RRT.h
+index 193151c9..53bad40e 100644
+--- a/planning/algorithms/RRT.h
++++ b/planning/algorithms/RRT.h
+@@ -1,32 +1,37 @@
+ // planning/algorithms/RRT.h
+-// Rapidly-exploring Random Tree — probabilistic path planning algorithm.
+-// Builds a tree by randomly sampling the space and extending toward samples.
+-// Unlike grid-based algorithms, RRT works in continuous space and naturally
+-// handles high-dimensional configuration spaces.
++// Rapidly-exploring Random Tree — probabilistic path planning.
++// Default mode: RRT* (rewiring enabled), which is asymptotically optimal.
++// Set useRewiring=false in constructor to get classic RRT behaviour.
+ //
+-// Self-driving car analog: used for motion planning in continuous space —
+-// parking maneuvers, lane changes, arm movements in robotic systems.
++// CONCEPT — RRT vs RRT*
++//   RRT (Lavalle 1998): finds ANY collision-free path by randomly sampling
++//   the space and growing a tree. Fast but not optimal — the found path
++//   depends entirely on which random samples were drawn.
+ //
+-// Key concepts:
+-//   - Sample a random position in the grid
+-//   - Find the nearest node in the tree
+-//   - Extend toward the sample by stepSize
+-//   - If the extension is collision-free, add it to the tree
+-//   - Repeat until goal is within stepSize of a tree node
++//   RRT* (Karaman & Frazzoli 2011): adds two steps after each new node:
++//     1. Best-parent selection: among all nodes within radius r, pick the
++//        parent that gives the new node the lowest total cost from start.
++//     2. Rewiring: for each near node, check if routing THROUGH the new node
++//        gives it a lower cost. If yes, redirect its parent pointer.
++//   As the tree grows, path quality improves toward optimal.
++//   Asymptotic optimality: as iterations → ∞, found path → shortest path.
+ //
+-// Limitation: paths are not optimal — RRT finds any valid path, not the
+-// shortest. RRT* (a future extension) adds rewiring to approach optimality.
++// CONCEPT — Rewire radius
++//   r = 3 * stepSize_ — a practical fixed radius for grid environments.
++//   The theoretically optimal radius shrinks as log(n)/n, but the fixed
++//   constant works well in practice and avoids expensive log computation.
++//
++// Self-driving car analog: motion planning for parking and lane changes —
++// RRT finds a valid maneuver, RRT* finds the smoothest valid maneuver.
+ //
+ // STL highlights:
+-//   vector<RRTNode>  — the tree stored as flat list
++//   vector<RRTNode>  — flat tree, index = node ID
+ //   mt19937          — random position sampling
+ #ifndef RRT_H
+ #define RRT_H
+ 
+ #include <vector>
+ #include <string>
+-#include <random>
+-#include <limits>
+ #include "../../core/Position.h"
+ #include "../../core/Types.h"
+ #include "../../environment/Environment.h"
+@@ -36,14 +41,17 @@
+ struct RRTNode
+ {
+     Position pos;
+-    int      parentIndex;   // index into the tree vector, -1 for root
++    int      parentIndex;    // index into tree_, -1 for root
++    double   costFromStart;  // Euclidean distance along tree from root to this node
+ };
+ 
+ // ---- RRT --------------------------------------------------------------------
+ class RRT : public IPathfinder
+ {
+ public:
+-    RRT() = default;
++    // useRewiring = true  → RRT* (asymptotically optimal, default)
++    // useRewiring = false → classic RRT (faster per iteration, not optimal)
++    explicit RRT(bool useRewiring = true);
+ 
+     std::vector<Position> findPath(
+         const Environment& env,
+@@ -56,30 +64,39 @@ public:
+     int           getNodesExplored() const override;
+ 
+ private:
++    bool                 useRewiring_;
+     std::vector<RRTNode> tree_;
+     int                  nodesExplored_ = 0;
+ 
+-    // Maximum distance to extend toward a sample per iteration
+-    static constexpr int stepSize_ = 2;
+-
+-    // Maximum iterations before giving up
+-    static constexpr int maxIterations_ = 10000;
++    static constexpr int    stepSize_     = 2;
++    static constexpr int    maxIterations_ = 10000;
++    static constexpr double rewireRadius_ = 3.0 * stepSize_;
+ 
+     void     clearState();
++    int      nearestNodeIndex(const Position& target)                    const;
++    Position steer(const Position& nearest, const Position& target)      const;
++    bool     isCollisionFree(const Environment& env,
++                              const Position&    a,
++                              const Position&    b)                      const;
++    std::vector<Position> extractPath(int goalNodeIndex)                 const;
+ 
+-    // Find index of node in tree_ closest to target
+-    int      nearestNodeIndex(const Position& target)                  const;
++    // Euclidean distance between two grid positions.
++    double euclideanDistance(const Position& a, const Position& b)       const;
+ 
+-    // Step from nearest toward target by stepSize_
+-    Position steer(const Position& nearest, const Position& target)    const;
++    // Return indices of all tree nodes within rewireRadius_ of center.
++    std::vector<int> findNearNodes(const Position& center)               const;
+ 
+-    // Check if the straight line from a to b is obstacle-free
+-    bool     isCollisionFree(const Environment& env,
+-                              const Position&    a,
+-                              const Position&    b)                    const;
++    // For each near node, redirect its parent to newNodeIndex if routing through
++    // the new node gives it a lower costFromStart. Updates costFromStart in place,
++    // then propagates the cost delta down through all descendants of the rewired node.
++    void rewire(int newNodeIndex, const std::vector<int>& nearNodeIndices,
++                const Environment& env);
+ 
+-    // Walk parentIndex chain from goalNode back to root, return path
+-    std::vector<Position> extractPath(int goalNodeIndex)               const;
++    // BFS from rewiredNodeIndex downward: update every descendant's costFromStart
++    // by the same delta applied to the rewired node. O(n) worst case but necessary
++    // for RRT* correctness — without propagation future best-parent decisions use
++    // stale costs and asymptotic optimality degrades.
++    void propagateSubtreeCosts(int rewiredNodeIndex, double costDelta);
+ };
+ 
+ #endif  // RRT_H
+diff --git a/python/train_dqn.py b/python/train_dqn.py
+index d519ef62..fdb7a029 100644
+--- a/python/train_dqn.py
++++ b/python/train_dqn.py
+@@ -55,6 +55,7 @@ EPSILON_START     = 1.0
+ EPSILON_MIN       = 0.05
+ EPSILON_DECAY     = 0.995
+ TARGET_UPDATE_FREQ = 100     # copy main → target every N steps
++USE_DOUBLE_DQN    = True     # True: main selects action, target evaluates (recommended)
+ 
+ # ---- Helpers ----------------------------------------------------------------
+ 
+@@ -87,10 +88,26 @@ def compute_loss(batch,
+     states, actions, rewards, next_states, dones = batch
+     q_values = main_network(states)
+     q_values = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
++    # CONCEPT — Double DQN
++    #   Standard DQN uses the target network to both SELECT and EVALUATE the best
++    #   next action. The same network grading its own choices causes systematic
++    #   overestimation: it picks the action it rated highest, then confirms that
++    #   rating is high. Over training this inflates Q-values and destabilises learning.
++    #
++    #   Double DQN decouples the two questions:
++    #     1. Main network selects:  a* = argmax_a Q_main(s', a)
++    #     2. Target network scores: Q_target(s', a*)
++    #   The frozen target network gives an independent score for the action the
++    #   main network chose — overestimation bias drops significantly.
+     with torch.no_grad():
+-        best_actions  = main_network(next_states).argmax(1)
+-        next_q_values = target_network(next_states).gather(1, best_actions.unsqueeze(1)).squeeze(1)
+-    target = rewards + gamma * next_q_values * (1 - dones)
++        if USE_DOUBLE_DQN:
++            selected_actions   = main_network(next_states).argmax(1)
++            evaluated_q_values = target_network(next_states).gather(
++                1, selected_actions.unsqueeze(1)
++            ).squeeze(1)
++        else:
++            evaluated_q_values = target_network(next_states).max(1)[0]
++    target = rewards + gamma * evaluated_q_values * (1 - dones)
+     return nn.MSELoss()(q_values, target)
+ 
+ # ---- Training loop ----------------------------------------------------------
+diff --git a/python/visualization/heuristic_quality.py b/python/visualization/heuristic_quality.py
+index 708849ee..85b0a68e 100644
+--- a/python/visualization/heuristic_quality.py
++++ b/python/visualization/heuristic_quality.py
+@@ -37,6 +37,10 @@ from heuristic_net import HeuristicNetwork
+ DATA_PATH    = os.path.join(os.path.dirname(__file__), '..', 'data', 'heuristic_training.npy')
+ WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'weights.bin')
+ 
++GRID_W = 41
++GRID_H = 41
++MAX_H  = GRID_W + GRID_H - 2  # 80 — maximum Manhattan distance corner-to-corner
++
+ 
+ def load_model_from_weights(weights_path: str) -> HeuristicNetwork:
+     """
+@@ -47,14 +51,12 @@ def load_model_from_weights(weights_path: str) -> HeuristicNetwork:
+ 
+     Note: we save/load .pt (PyTorch state dict) for Python-side visualisation.
+     The BINARY format (weights.bin) is for C++ only — C++ cannot read .pt files.
+-    Implement:
+-    1. model = HeuristicNetwork()
+-    2. model.load_state_dict(torch.load(weights_path.replace('.bin', '.pt')))
+-    3. model.eval()
+-    4. return model
+     """
+-    # TODO: load .pt state dict and return eval-mode model
+-    raise NotImplementedError("implement model loading from state dict")
++    model = HeuristicNetwork()
++    pt_path = weights_path.replace('.bin', '.pt')
++    model.load_state_dict(torch.load(pt_path, weights_only=True))
++    model.eval()
++    return model
+ 
+ 
+ def plot_predicted_vs_true(model: HeuristicNetwork, data: np.ndarray) -> None:
+@@ -65,21 +67,34 @@ def plot_predicted_vs_true(model: HeuristicNetwork, data: np.ndarray) -> None:
+     The diagonal y=x represents a perfect heuristic.
+     The red line y=1.5*x is the weighted A* ε=1.5 boundary — points above
+     this line violate even the ε=1.5 guarantee.
+-
+-    Implement:
+-    1. Sample 5000 random rows from data (plotting all is slow)
+-    2. inputs = torch.tensor(data[:5000, :4], dtype=torch.float32)
+-    3. with torch.no_grad(): h_hat = model(inputs).numpy().flatten()
+-    4. true_h_star = data[:5000, 4]
+-    5. Denormalise: multiply both by (GRID_W + GRID_H - 2) to get raw step counts
+-       (41 + 41 - 2 = 80 max steps — makes axis labels interpretable)
+-    6. plt.scatter(true_h_star, h_hat, alpha=0.3, s=2)
+-    7. Plot diagonal: plt.plot([0, 80], [0, 80], 'g--', label='perfect heuristic')
+-    8. Plot ε bound:  plt.plot([0, 80], [0, 120], 'r--', label='ε=1.5 bound')
+-    9. Label axes, add legend, show count of inadmissible points above diagonal
+     """
+-    # TODO: implement scatter plot of h_hat vs h_star with diagnostic lines
+-    raise NotImplementedError("implement scatter diagnostic plot")
++    sample_count = min(5000, len(data))
++    indices      = np.random.choice(len(data), sample_count, replace=False)
++    sample_data  = data[indices]
++
++    inputs = torch.tensor(sample_data[:, :4], dtype=torch.float32)
++    with torch.no_grad():
++        h_hat_norm = model(inputs).numpy().flatten()
++
++    true_h_norm = sample_data[:, 4]
++
++    # Denormalise — convert [0,1] back to step counts
++    h_hat_steps = h_hat_norm * MAX_H
++    true_h_steps = true_h_norm * MAX_H
++
++    inadmissible_count = int(np.sum(h_hat_steps > true_h_steps))
++    inadmissible_pct   = 100.0 * inadmissible_count / sample_count
++
++    plt.scatter(true_h_steps, h_hat_steps, alpha=0.3, s=2, color='steelblue', label='predictions')
++    plt.plot([0, MAX_H], [0, MAX_H],        'g--', linewidth=1.5, label='perfect heuristic (y=x)')
++    plt.plot([0, MAX_H], [0, MAX_H * 1.5],  'r--', linewidth=1.5, label='ε=1.5 bound')
++    plt.xlabel('True h* (steps)')
++    plt.ylabel('Predicted h̃ (steps)')
++    plt.title(f'Predicted vs True h*\nInadmissible: {inadmissible_count}/{sample_count} ({inadmissible_pct:.1f}%)')
++    plt.legend(fontsize=8)
++    plt.xlim(0, MAX_H)
++    plt.ylim(0, MAX_H * 1.6)
++    plt.grid(True, alpha=0.3)
+ 
+ 
+ def plot_nodes_explored_comparison(astar_nodes: list, neural_nodes: list) -> None:
+@@ -88,38 +103,93 @@ def plot_nodes_explored_comparison(astar_nodes: list, neural_nodes: list) -> Non
+     Mean nodes explored is the primary performance metric for heuristic quality.
+     Error bars (standard deviation) show variance across different maze topologies.
+     A tighter heuristic = lower mean AND lower variance.
+-
+-    astar_nodes  — list of node counts from plain A* on test mazes
+-    neural_nodes — list of node counts from Neural A* on SAME test mazes
+-
+-    Implement:
+-    1. means = [np.mean(astar_nodes), np.mean(neural_nodes)]
+-    2. stds  = [np.std(astar_nodes),  np.std(neural_nodes)]
+-    3. plt.bar(['A* (Manhattan)', 'Neural A* (learned)'], means, yerr=stds, capsize=5)
+-    4. Add annotation: "Reduction: {reduction:.1f}%" where
+-       reduction = (means[0] - means[1]) / means[0] * 100
+-    5. Label axes: 'Algorithm', 'Nodes Explored (mean ± std)'
+     """
+-    # TODO: implement bar chart with error bars and reduction annotation
+-    raise NotImplementedError("implement node count comparison bar chart")
++    means = [np.mean(astar_nodes), np.mean(neural_nodes)]
++    stds  = [np.std(astar_nodes),  np.std(neural_nodes)]
++
++    bars = plt.bar(
++        ['A* (Manhattan)', 'Neural A* (learned)'],
++        means,
++        yerr=stds,
++        capsize=5,
++        color=['steelblue', 'darkorange'],
++        alpha=0.8,
++        edgecolor='black',
++        linewidth=0.8,
++    )
++
++    reduction = (means[0] - means[1]) / means[0] * 100 if means[0] > 0 else 0.0
++    plt.annotate(
++        f'Reduction: {reduction:.1f}%',
++        xy=(1, means[1]),
++        xytext=(0.5, max(means) * 0.85),
++        fontsize=10,
++        ha='center',
++        arrowprops=dict(arrowstyle='->', color='black'),
++    )
++
++    plt.xlabel('Algorithm')
++    plt.ylabel('Nodes Explored (mean ± std)')
++    plt.title('Node Expansion Comparison')
++    plt.grid(True, axis='y', alpha=0.3)
+ 
+ 
+ def main():
+     """
+-    Implement:
+-    1. Load data with np.load(DATA_PATH)
+-    2. Load model with load_model_from_weights(WEIGHTS_PATH)
+-    3. plt.figure(figsize=(12, 5))
+-    4. plt.subplot(1, 2, 1) → call plot_predicted_vs_true()
+-    5. plt.subplot(1, 2, 2) → generate node count data by running A* and Neural A*
+-       on 100 fresh test mazes (import pathplanning, run both algorithms, collect counts)
+-       → call plot_nodes_explored_comparison()
+-    6. plt.tight_layout()
+-    7. plt.savefig('heuristic_quality.png', dpi=150)
+-    8. plt.show()
++    Load data and model, produce both diagnostic plots side by side, save to PNG.
+     """
+-    # TODO: wire together both plots, save figure
+-    raise NotImplementedError("implement main plotting pipeline")
++    import pathplanning
++
++    if not os.path.exists(DATA_PATH):
++        print(f"Training data not found at {DATA_PATH}.")
++        print("Run: python generate_heuristic_data.py")
++        return
++
++    pt_path = WEIGHTS_PATH.replace('.bin', '.pt')
++    if not os.path.exists(pt_path):
++        print(f"Model weights not found at {pt_path}.")
++        print("Run: python train_heuristic_net.py")
++        return
++
++    data  = np.load(DATA_PATH)
++    model = load_model_from_weights(WEIGHTS_PATH)
++
++    # Collect node counts on 100 fresh test mazes
++    print("Running A* and Neural A* on 100 test mazes...")
++    astar_nodes  = []
++    neural_nodes = []
++    obstacle_density = 0.25
++    test_seed_offset = 9000
++    weights_path     = os.path.join(os.path.dirname(__file__), '..', 'data', 'weights.bin')
++
++    for maze_index in range(100):
++        seed        = test_seed_offset + maze_index
++        env         = pathplanning.GridEnvironment(GRID_W, GRID_H, 1, 1,
++                                                   GRID_W - 2, GRID_H - 2,
++                                                   obstacle_density, seed)
++        env.findPath(1, 1, GRID_W - 2, GRID_H - 2)
++        astar_nodes.append(env.getNodesExplored())
++
++        neural_algo = pathplanning.NeuralAStar(weights_path)
++        env.runNeuralAStar(neural_algo, 1, 1, GRID_W - 2, GRID_H - 2)
++        neural_nodes.append(neural_algo.getNodesExplored())
++
++        if (maze_index + 1) % 25 == 0:
++            print(f"  {maze_index + 1}/100 mazes done")
++
++    plt.figure(figsize=(12, 5))
++
++    plt.subplot(1, 2, 1)
++    plot_predicted_vs_true(model, data)
++
++    plt.subplot(1, 2, 2)
++    plot_nodes_explored_comparison(astar_nodes, neural_nodes)
++
++    plt.tight_layout()
++    output_path = os.path.join(os.path.dirname(__file__), 'heuristic_quality.png')
++    plt.savefig(output_path, dpi=150)
++    print(f"Saved to {output_path}")
++    plt.show()
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/rl/DynaQAgent.cpp b/rl/DynaQAgent.cpp
+index d47c0e1b..18def0ce 100644
+--- a/rl/DynaQAgent.cpp
++++ b/rl/DynaQAgent.cpp
+@@ -1,5 +1,7 @@
+ // rl/DynaQAgent.cpp
+ #include "DynaQAgent.h"
++#include <stdexcept>
++#include <cmath>
+ 
+ // ---- DynaQAgent constructor -------------------------------------------------
+ 
+@@ -9,26 +11,27 @@ DynaQAgent::DynaQAgent(RLEnvironment& environment,
+                        double         epsilonStart,
+                        double         epsilonMin,
+                        double         epsilonDecay,
+-                       int            planningSteps)
++                       int            planningSteps,
++                       double         priorityThreshold)
+     : RLAgent(environment, learningRate, discountFactor,
+               epsilonStart, epsilonMin, epsilonDecay),
+       planningSteps_(planningSteps),
+-      keyDist_(0, 0)
++      priorityThreshold_(priorityThreshold)
+ {
+-    // model_ and modelKeys_ start empty — populated on first real transitions.
+-    // No reserve/pre-allocation per spec: let them grow naturally.
+-    // keyDist_ range is updated lazily in planningUpdate() as model grows.
++    if (planningSteps < 0)
++        throw std::invalid_argument("DynaQAgent: planningSteps must be >= 0");
++    if (priorityThreshold < 0.0)
++        throw std::invalid_argument("DynaQAgent: priorityThreshold must be >= 0");
+ }
+ 
+ // ---- runEpisode -------------------------------------------------------------
+ 
+ TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
+ {
+-    // I-2: env_.reset() called exactly once per episode at start of runEpisode().
+     Position currentPosition = env_.reset();
+-    double totalReward = 0.0;
+-    int    stepCount   = 0;
+-    bool   goalReached = false;
++    double   totalReward     = 0.0;
++    int      stepCount       = 0;
++    bool     goalReached     = false;
+ 
+     for (int step = 0; step < maxStepsPerEpisode; ++step)
+     {
+@@ -36,25 +39,29 @@ TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
+         Action     action     = selectAction(currentPosition);
+         StepResult stepResult = env_.step(action);
+ 
+-        // 2. Direct RL update — same Bellman update as Q-learning.
+-        updateQValue(currentPosition, action, stepResult.reward, stepResult.newPosition, stepResult.done);
++        // 2. Compute Bellman error BEFORE the update so the priority reflects
++        //    true pre-update surprise — the property that makes prioritized
++        //    sweeping work. Enqueue first, then apply the update.
++        enqueueIfSignificant(currentPosition, action,
++                             stepResult.reward, stepResult.newPosition,
++                             stepResult.done);
+ 
+-        totalReward     += stepResult.reward;
++        // 3. Direct RL update.
++        updateQValue(currentPosition, action, stepResult.reward,
++                     stepResult.newPosition, stepResult.done);
++
++        totalReward += stepResult.reward;
+         ++stepCount;
+ 
+-        // 3. Update world model with this real transition.
+-        //    If this (state, action) pair is new, push key to mirror vector.
+-        ModelKey key{currentPosition, action};
+-        bool isNewKey = (model_.find(key) == model_.end());
+-        model_[key] = ModelValue{stepResult.reward, stepResult.newPosition};
+-        if (isNewKey)
+-        {
+-            modelKeys_.push_back(key);
+-        }
++        // 4. Update world model with this real transition — now includes done flag.
++        ModelKey modelKey{currentPosition, action};
++        model_[modelKey] = ModelTransition{stepResult.reward,
++                                           stepResult.newPosition,
++                                           stepResult.done};
+ 
+         currentPosition = stepResult.newPosition;
+ 
+-        // 4. Planning sweep — n imagined Bellman updates from model.
++        // 5. Prioritized planning sweep.
+         planningUpdate();
+ 
+         if (stepResult.done)
+@@ -68,37 +75,73 @@ TrainingResult DynaQAgent::runEpisode(int episodeNumber, int maxStepsPerEpisode)
+     return TrainingResult(episodeNumber, totalReward, stepCount, goalReached, epsilon_);
+ }
+ 
+-// ---- planningUpdate ---------------------------------------------------------
++// ---- Private helpers --------------------------------------------------------
++
++double DynaQAgent::computeBellmanError(const Position& position,
++                                        Action          action,
++                                        double          reward,
++                                        const Position& nextPosition,
++                                        bool            done) const
++{
++    // CONCEPT — Bellman error without writing:
++    //   Mirrors updateQValue arithmetic exactly — including the done flag which
++    //   zeroes the future-value term for terminal transitions. Without done,
++    //   goal transitions would be over-prioritised by γ·maxQ(goal).
++    double currentQValue  = qTable_.getValue(position, action);
++    double bestNextQValue = done ? 0.0 : qTable_.getMaxValue(nextPosition);
++    double bellmanTarget  = reward + discountFactor_ * bestNextQValue;
++    return std::abs(bellmanTarget - currentQValue);
++}
++
++void DynaQAgent::enqueueIfSignificant(const Position& position,
++                                       Action          action,
++                                       double          reward,
++                                       const Position& nextPosition,
++                                       bool            done)
++{
++    double bellmanError = computeBellmanError(position, action, reward, nextPosition, done);
++    if (bellmanError > priorityThreshold_)
++        prioritizedTransitions_.push({bellmanError, {position, action}});
++}
+ 
+ void DynaQAgent::planningUpdate()
+ {
+-    // Guard: skip entirely when no planning or model is empty (spec requirement).
+-    if (planningSteps_ <= 0 || modelKeys_.empty()) return;
++    // CONCEPT — Cascading value propagation:
++    //   After updating Q(s, a), predecessors of s may now have significant
++    //   Bellman error. We scan modelKeys_ for predecessors and re-enqueue them.
++    //   This cascades value backwards through the model automatically.
+ 
+-    // Update cached distribution range to match current model size.
+-    keyDist_.param(std::uniform_int_distribution<int>::param_type(
+-        0, static_cast<int>(modelKeys_.size()) - 1));
++    if (planningSteps_ <= 0 || prioritizedTransitions_.empty()) return;
+ 
+-    for (int i = 0; i < planningSteps_; ++i)
++    for (int sweep = 0; sweep < planningSteps_ && !prioritizedTransitions_.empty(); ++sweep)
+     {
+-        // Sample a random previously-seen (state, action) pair.
+-        int idx = keyDist_(randomEngine_);
+-        const ModelKey&   key   = modelKeys_[idx];
+-        const ModelValue& value = model_.at(key);
+-
+-        const Position& sampledPos    = key.first;
+-        Action          sampledAction = key.second;
+-        double          sampledReward = value.first;
+-        const Position& sampledNext   = value.second;
+-
+-        // Apply Bellman update using the imagined transition.
+-        // Planning replays never carry terminal status — model doesn't store done.
+-        updateQValue(sampledPos, sampledAction, sampledReward, sampledNext, false);
+-    }
++        PrioritizedTransition top = prioritizedTransitions_.top();
++        prioritizedTransitions_.pop();
+ 
+-    // CONCEPT — Why does this work?
+-    //   The model stores deterministic transitions (last observed outcome for each
+-    //   state-action pair). Replaying them is equivalent to re-experiencing those
+-    //   moments — the Q-values converge faster because each real step triggers
+-    //   planningSteps_ additional updates, not just one.
++        if (auto modelIterator = model_.find(top.key); modelIterator == model_.end()) continue;
++        else
++        {
++            const Position&        sampledPosition = top.key.first;
++            Action                 sampledAction   = top.key.second;
++            const ModelTransition& transition      = modelIterator->second;
++
++            updateQValue(sampledPosition, sampledAction,
++                         transition.reward, transition.nextPosition,
++                         transition.terminalTransition);
++
++            for (const auto& [predecessorKey, predecessorTransition] : model_)
++            {
++                if (!(predecessorTransition.nextPosition == sampledPosition)) continue;
++                double predecessorError = computeBellmanError(
++                    predecessorKey.first,
++                    predecessorKey.second,
++                    predecessorTransition.reward,
++                    predecessorTransition.nextPosition,
++                    predecessorTransition.terminalTransition
++                );
++                if (predecessorError > priorityThreshold_)
++                    prioritizedTransitions_.push({predecessorError, predecessorKey});
++            }
++        }
++    }
+ }
+diff --git a/rl/DynaQAgent.h b/rl/DynaQAgent.h
+index ecd72bc8..1e911aa3 100644
+--- a/rl/DynaQAgent.h
++++ b/rl/DynaQAgent.h
+@@ -1,5 +1,5 @@
+ // rl/DynaQAgent.h
+-// Dyna-Q agent — model-based RL that combines direct RL with planning.
++// Dyna-Q agent — model-based RL with prioritized sweeping.
+ //
+ // CONCEPT — What is Dyna-Q?
+ //   Dyna-Q (Sutton 1990) augments Q-learning with a world model.
+@@ -8,7 +8,6 @@
+ //     2. Planning sweep     — n additional Bellman updates replayed from the model
+ //
+ //   The model stores: given (state, action) I previously saw -> (reward, next_state).
+-//   The planning sweep randomly samples n past transitions and re-applies the update.
+ //   This is equivalent to the agent "imagining" past experiences in its head.
+ //
+ // CONCEPT — Why is this more sample-efficient than Q-learning?
+@@ -16,73 +15,123 @@
+ //   With n=10 the agent learns ~10x faster in terms of environment interactions.
+ //   This matters when real interactions are expensive (physical robots, slow sims).
+ //
+-// CONCEPT — model_ and modelKeys_
+-//   model_ maps (Position, Action) -> (reward, next_Position).
+-//   modelKeys_ is a parallel vector of all keys ever inserted, used for O(1)
+-//   random sampling during planning. std::unordered_map has no random access;
+-//   without this mirror we would need std::advance (O(n) per planning step).
++// CONCEPT — Prioritized sweeping (Moore & Atkeson, 1993)
++//   Original Dyna-Q samples random (state, action) pairs during planning.
++//   Prioritized sweeping replaces random selection with a max-heap ordered by
++//   |ΔQ| — the magnitude of the Bellman error. Transitions where the agent was
++//   most wrong get replayed first. Same planning budget, dramatically faster
++//   value propagation because the most informative updates happen first.
++//
++//   After each real transition:
++//     1. Compute |ΔQ| = |reward + γ·maxQ(s') - Q(s,a)|
++//     2. If |ΔQ| > priorityThreshold_: push (|ΔQ|, s, a) onto the heap
++//   In planningUpdate():
++//     1. Pop the highest-priority (s, a) from the heap
++//     2. Apply Bellman update — this may change Q(s,a) significantly
++//     3. For each predecessor (s_prev, a_prev) that leads to s: recompute
++//        their |ΔQ| and re-enqueue if significant (cascades value backwards)
+ //
+ // CONCEPT — planningSteps_ = 0
+ //   A valid configuration — the planning sweep is skipped entirely and DynaQ
+-//   degenerates to pure Q-learning. No-op guard: if (planningSteps_ > 0 && ...)
++//   degenerates to pure Q-learning.
+ #ifndef DYNA_Q_AGENT_H
+ #define DYNA_Q_AGENT_H
+ 
+ #include <unordered_map>
+-#include <vector>
++#include <queue>
+ #include <utility>
+ #include "RLAgent.h"
+ 
+ // ---- Model types ------------------------------------------------------------
+ 
+-using ModelKey   = std::pair<Position, Action>;
+-using ModelValue = std::pair<double, Position>;  // {reward, nextPos}
++using ModelKey = std::pair<Position, Action>;
++
++// CONCEPT — Why a struct instead of pair<double, Position>?
++//   The original pair stored only {reward, nextPos} with no way to distinguish
++//   terminal transitions. Planning replays that land on the goal incorrectly
++//   bootstrapped γ·maxQ(goal) instead of 0. Adding terminalTransition fixes
++//   this and makes the model semantically complete.
++struct ModelTransition
++{
++    double   reward;
++    Position nextPosition;
++    bool     terminalTransition;
++};
+ 
+ struct ModelKeyHash
+ {
+-    std::size_t operator()(const ModelKey& k) const noexcept
++    std::size_t operator()(const ModelKey& key) const noexcept
+     {
+-        std::size_t h1 = PositionHash{}(k.first);
+-        std::size_t h2 = std::hash<int>{}(static_cast<int>(k.second));
++        std::size_t h1 = PositionHash{}(key.first);
++        std::size_t h2 = std::hash<int>{}(static_cast<int>(key.second));
+         return h1 ^ (h2 * 2654435761ULL);
+     }
+ };
+ 
++// ---- PrioritizedTransition --------------------------------------------------
++//
++// CONCEPT — Named struct over std::pair:
++//   std::priority_queue<std::pair<double, ModelKey>> would work, but
++//   pair's first/second naming makes the code harder to read. A named struct
++//   with descriptive fields (bellmanError, key) documents intent at every use site.
++struct PrioritizedTransition
++{
++    double   bellmanError;  // |ΔQ| — larger = replayed sooner
++    ModelKey key;           // (state, action) to replay
++
++    bool operator<(const PrioritizedTransition& other) const
++    {
++        return bellmanError < other.bellmanError;  // max-heap: largest error first
++    }
++};
++
+ // ---- DynaQAgent -------------------------------------------------------------
+ 
+ class DynaQAgent : public RLAgent
+ {
+ public:
+-    // planningSteps: number of model-based updates per real step.
+-    //   0 = no planning (equivalent to Q-learning).
+-    //   Typical values: 5, 10, 50.
++    // planningSteps: number of model-based updates per real step (0 = no planning).
++    // priorityThreshold: minimum |ΔQ| to enqueue a transition (default 0.01).
+     DynaQAgent(RLEnvironment& environment,
+                double         learningRate,
+                double         discountFactor,
+                double         epsilonStart,
+                double         epsilonMin,
+                double         epsilonDecay,
+-               int            planningSteps);
++               int            planningSteps,
++               double         priorityThreshold = 0.01);
+ 
+-    // Run one episode with Dyna-Q: real step + model update + planning sweep.
++    // Run one episode with Dyna-Q + prioritized sweeping.
+     TrainingResult runEpisode(int episodeNumber, int maxStepsPerEpisode) override;
+ 
+ private:
+-    // World model: (state, action) -> (reward, next_state)
+-    std::unordered_map<ModelKey, ModelValue, ModelKeyHash> model_;
++    // World model: (state, action) -> transition
++    // Iterated directly for predecessor scanning — no mirror vector needed.
++    std::unordered_map<ModelKey, ModelTransition, ModelKeyHash> model_;
++
++    int    planningSteps_;
++    double priorityThreshold_;
+ 
+-    // Mirror of model_ keys for O(1) random sampling during planning.
+-    // Grows in sync with model_ — keys are pushed when first inserted.
+-    std::vector<ModelKey> modelKeys_;
++    // Max-heap of transitions ordered by Bellman error magnitude.
++    std::priority_queue<PrioritizedTransition> prioritizedTransitions_;
+ 
+-    int planningSteps_;
++    // Compute |ΔQ| for (position, action) without writing to the Q-table.
++    // done mirrors updateQValue semantics: zeroes future-value term for terminal transitions.
++    [[nodiscard]] double computeBellmanError(const Position& position,
++                               Action          action,
++                               double          reward,
++                               const Position& nextPosition,
++                               bool            done) const;
+ 
+-    // Cached distribution for sampling modelKeys_ — range updated lazily.
+-    // Avoids reconstructing a new distribution object on every planningUpdate() call.
+-    mutable std::uniform_int_distribution<int> keyDist_;
++    // Push (position, action) onto the heap if its Bellman error exceeds threshold.
++    void enqueueIfSignificant(const Position& position,
++                              Action          action,
++                              double          reward,
++                              const Position& nextPosition,
++                              bool            done);
+ 
+-    // Perform planningSteps_ Bellman updates using randomly-sampled model entries.
+-    // No-op if planningSteps_ == 0 or model_ is empty.
++    // Pop from the priority heap and perform up to planningSteps_ updates.
++    // Cascades: after each update, re-enqueues predecessors whose |ΔQ| rises.
+     void planningUpdate();
+ };
+ 
+diff --git a/rl/QTable.cpp b/rl/QTable.cpp
+index 70a55b06..1f07bf6d 100644
+--- a/rl/QTable.cpp
++++ b/rl/QTable.cpp
+@@ -4,9 +4,7 @@
+ 
+ // ---- Constructor ------------------------------------------------------------
+ 
+-QTable::QTable(int width, int height)
+-    : width_(width),
+-      height_(height)
++QTable::QTable(int /*width*/, int /*height*/)
+ {}
+     // table_ is default-constructed as an empty unordered_map.
+     // Q-values are implicitly 0.0 — getValue returns 0.0 for any unseen key.
+diff --git a/rl/QTable.h b/rl/QTable.h
+index 8c3c2999..24bb8e3c 100644
+--- a/rl/QTable.h
++++ b/rl/QTable.h
+@@ -74,9 +74,6 @@ public:
+     void reset();
+ 
+ private:
+-    int width_;
+-    int height_;
+-
+     // Flat map: Position → array of 4 Q-values (one per Action).
+     // unordered_map chosen for O(1) average lookup — the agent calls getValue
+     // and setValue on every single step of every episode.
+diff --git a/rl/RLAgent.cpp b/rl/RLAgent.cpp
+index 7ffa03f1..52af2f64 100644
+--- a/rl/RLAgent.cpp
++++ b/rl/RLAgent.cpp
+@@ -116,15 +116,14 @@ std::vector<Position> RLAgent::extractGreedyPath(int maxSteps) const
+             {qTable_.getValue(currentPosition, Action::RIGHT), Action::RIGHT}
+         }};
+         std::sort(rankedActions.begin(), rankedActions.end(),
+-                  [](const std::pair<double, Action>& firstPair,
+-                     const std::pair<double, Action>& secondPair) {
+-                      return firstPair.first > secondPair.first;
++                  [](const std::pair<double, Action>& a, const std::pair<double, Action>& b) {
++                      return a.first > b.first;
+                   });
+ 
+         bool movedThisStep = false;
+-        for (const std::pair<double, Action>& rankedAction : rankedActions)
++        for (const auto& [qValue, action] : rankedActions)
+         {
+-            Position candidatePosition = stepInDirection(currentPosition, rankedAction.second);
++            Position candidatePosition = stepInDirection(currentPosition, action);
+ 
+             if (candidatePosition == goal)
+             {
+diff --git a/rl/RLEnvironment.cpp b/rl/RLEnvironment.cpp
+index e527bb51..c4c4d754 100644
+--- a/rl/RLEnvironment.cpp
++++ b/rl/RLEnvironment.cpp
+@@ -1,6 +1,7 @@
+ // rl/RLEnvironment.cpp
+ #include "RLEnvironment.h"
+ #include <stdexcept>
++#include <cmath>
+ 
+ // ---- Constructor ------------------------------------------------------------
+ 
+@@ -30,13 +31,16 @@ StepResult RLEnvironment::step(Action action)
+     
+     if(env_.inBounds(candidatePosition) && !env_.isObstacle(candidatePosition))
+     {
++        Position previousPosition = currentPosition_;
+         currentPosition_ = candidatePosition;
+         if (currentPosition_ == env_.getGoal())
+-            return { currentPosition_, REWARD_GOAL, true  };
+-        return { currentPosition_, REWARD_STEP, false };
++            return { currentPosition_, REWARD_GOAL, true };
++        double bonus = shapingBonus(previousPosition, currentPosition_);
++        return { currentPosition_, REWARD_STEP + bonus, false };
+     }
+ 
+-    return { currentPosition_, REWARD_WALL, false };
++    double wallBonus = shapingBonus(currentPosition_, currentPosition_);
++    return { currentPosition_, REWARD_WALL + wallBonus, false };
+     // CONCEPT — Why stay put on a wall hit?
+     //   In a real robot, colliding with a wall is not "teleporting back to start."
+     //   The robot stays where it is but loses time and energy.
+@@ -69,6 +73,43 @@ bool RLEnvironment::isValid(const Position& position) const
+     return env_.isValid(position);
+ }
+ 
++// ---- Shaping ----------------------------------------------------------------
++
++void RLEnvironment::enableShaping(double discountFactor)
++{
++    if (discountFactor < 0.0 || discountFactor > 1.0)
++        throw std::invalid_argument("RLEnvironment::enableShaping — discountFactor must be in [0, 1]");
++    shapingEnabled_  = true;
++    shapingDiscount_ = discountFactor;
++}
++
++void RLEnvironment::disableShaping()
++{
++    shapingEnabled_ = false;
++}
++
++bool RLEnvironment::isShapingEnabled() const
++{
++    return shapingEnabled_;
++}
++
++double RLEnvironment::shapingBonus(const Position& fromPosition, const Position& toPosition) const
++{
++    if (!shapingEnabled_) return 0.0;
++
++    // No movement (wall hit) → no shaping. Potential-based shaping F(s,s') is
++    // defined for transitions; applying it to a no-op gives dist*(1-γ) > 0,
++    // which would partially cancel the wall penalty and distort learning.
++    if (fromPosition == toPosition) return 0.0;
++
++    Position goal = env_.getGoal();
++    double distFrom = std::abs(fromPosition.x - goal.x) + std::abs(fromPosition.y - goal.y);
++    double distTo   = std::abs(toPosition.x   - goal.x) + std::abs(toPosition.y   - goal.y);
++
++    // F(s, s') = γ·Φ(s') - Φ(s) = γ·(-distTo) - (-distFrom) = distFrom - γ·distTo
++    return distFrom - shapingDiscount_ * distTo;
++}
++
+ // ---- Private helpers --------------------------------------------------------
+ 
+ Position RLEnvironment::applyAction(const Position& fromPosition, Action action) const
+diff --git a/rl/RLEnvironment.h b/rl/RLEnvironment.h
+index 89f11be8..4232e615 100644
+--- a/rl/RLEnvironment.h
++++ b/rl/RLEnvironment.h
+@@ -19,6 +19,17 @@
+ //      -1.0   each valid step    — penalises long paths, agent learns to be efficient
+ //     -10.0   hitting a wall     — penalises wasted moves into obstacles
+ //
++// CONCEPT — Potential-based reward shaping (Ng et al., 1999)
++//   Sparse rewards (+100 only at goal) make early training slow — the agent
++//   wanders randomly until it accidentally reaches the goal.
++//   Shaping adds a small directional bonus F(s, s') = γ·Φ(s') - Φ(s)
++//   where Φ(s) = -manhattan_distance(s, goal) is the potential function.
++//   Moving closer to the goal gives a small positive bonus.
++//   Moving away gives a small penalty.
++//   Ng et al. proved that any potential-based shaping term leaves the
++//   OPTIMAL POLICY UNCHANGED — the agent will still find the shortest path.
++//   It just finds it faster because the reward landscape is less flat.
++//
+ // Self-driving car analog:
+ //   RLEnvironment = the simulator. The car (agent) sends steering commands,
+ //   the simulator moves the car and reports speed, position, crash status.
+@@ -61,10 +72,25 @@ public:
+     Position getGoal()             const;
+     bool     isValid(const Position& position) const;
+ 
++    // ---- Reward shaping -----------------------------------------------------
++
++    // Enable potential-based shaping using Φ(s) = -manhattan_distance(s, goal).
++    // discountFactor must match the agent's γ — see CONCEPT above for why.
++    // Throws std::invalid_argument if discountFactor is not in [0, 1].
++    void enableShaping(double discountFactor);
++
++    // Disable shaping — step() returns base rewards only.
++    void disableShaping();
++
++    bool isShapingEnabled() const;
++
+ private:
+     Environment& env_;             // grid — not owned, must outlive this object
+     Position     currentPosition_; // agent's current cell in the active episode
+ 
++    bool   shapingEnabled_  = false;
++    double shapingDiscount_ = 0.0;  // γ used in F(s,s') = γ·Φ(s') - Φ(s)
++
+     // Reward constants — see CONCEPT note above
+     static constexpr double REWARD_GOAL = 100.0;
+     static constexpr double REWARD_STEP =  -1.0;
+@@ -73,6 +99,10 @@ private:
+     // Translate an Action into a candidate Position one step away.
+     // Does not validate whether the position is in-bounds or obstacle-free.
+     Position applyAction(const Position& fromPosition, Action action) const;
++
++    // Compute shaping bonus F(s, s') = dist(s,goal) - γ·dist(s',goal).
++    // Returns 0.0 if shaping is disabled.
++    double shapingBonus(const Position& fromPosition, const Position& toPosition) const;
+ };
+ 
+ #endif  // RL_ENVIRONMENT_H
